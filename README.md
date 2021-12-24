@@ -8,7 +8,7 @@ XMRig2Xdag is translator between XMR stratum protocol and Xdag mining protocol. 
 XMRig can connect to Xdag mining pool through XMRig2Xdag proxy.
 
 
-##Acknowledgement
+## Acknowledgement
 https://github.com/xmrig/xmrig
 
 https://github.com/trey-jones/stratum
