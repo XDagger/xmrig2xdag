@@ -1,0 +1,10 @@
+.idea
+.vscode
+.DS_Store
+main
+xmrig2xdag
+go_build_xmrig2xdag
+*.exe
+*.log
+*.out
+*._*
