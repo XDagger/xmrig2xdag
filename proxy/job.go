@@ -10,12 +10,12 @@ import (
 )
 
 const (
-	nonceOffset = 39
-	nonceLength = 4 // bytes
+	nonceOffset = 32
+	nonceLength = 8 // bytes
 
 	// TODO - worker could supply expected hashes?
-	nonceIncrement = 0x7a120 // 500k, not really expected, just plenty of work
-	maxNonceValue  = math.MaxUint32 - nonceIncrement
+	nonceIncrement = 0x780000000 // 30M, not really expected, just plenty of work
+	maxNonceValue  = math.MaxUint64 - nonceIncrement
 )
 
 var (
@@ -30,9 +30,9 @@ type Job struct {
 	Target string `json:"target"`
 
 	submittedNonces []string `json:"-"`
-	initialNonce    uint32   `json:"-"`
+	initialNonce    uint64   `json:"-"`
 	currentBlob     []byte   `json:"-"`
-	currentNonce    uint32   `json:"-"`
+	currentNonce    uint64   `json:"-"`
 }
 
 // NewJobFromServer creates a Job from a pool notice
@@ -78,7 +78,7 @@ func (j *Job) Next() *Job {
 	}
 
 	nonceBytes := make([]byte, nonceLength, nonceLength)
-	binary.BigEndian.PutUint32(nonceBytes, j.currentNonce)
+	binary.BigEndian.PutUint64(nonceBytes, j.currentNonce)
 	copy(j.currentBlob[nonceOffset:nonceOffset+nonceLength], nonceBytes)
 	nextJob.Blob = hex.EncodeToString(j.currentBlob)
 
@@ -106,14 +106,14 @@ func NewJob(blobBytes []byte, nonce uint32, id, target string) *Job {
 }
 
 // Nonce extracts the nonce from the job blob and returns it.
-func (j *Job) Nonce() (nonce uint32, blobBytes []byte, err error) {
+func (j *Job) Nonce() (nonce uint64, blobBytes []byte, err error) {
 	blobBytes, err = hex.DecodeString(j.Blob)
 	if err != nil {
 		return
 	}
 
 	nonceBytes := blobBytes[nonceOffset : nonceOffset+nonceLength]
-	nonce = binary.BigEndian.Uint32(nonceBytes)
+	nonce = binary.BigEndian.Uint64(nonceBytes)
 
 	return
 }

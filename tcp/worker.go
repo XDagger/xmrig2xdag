@@ -14,7 +14,7 @@ const (
 	jobSendTimeout = 30 * time.Second
 )
 
-// worker does the work (of mining, well more like accounting)
+// Worker does the work (of mining, well more like accounting)
 type Worker struct {
 	conn net.Conn
 	id   uint64
@@ -38,7 +38,7 @@ func SpawnWorker(conn net.Conn) {
 	w.codec = codec.(*stratum.DefaultServerCodec)
 
 	p := proxy.GetDirector().NextProxy()
-	p.Add(w)
+	p.Add(w) // set worker's proxy
 
 	// blocks until disconnect
 	w.Proxy().SS.ServeCodec(codec)
@@ -54,7 +54,8 @@ func (w *Worker) SetConn(c net.Conn) {
 	w.conn = c
 }
 
-// Worker interface
+// Worker interfaces
+
 func (w *Worker) ID() uint64 {
 	return w.id
 }

@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"errors"
-	"math"
 	"strings"
 	"sync"
 	"time"
@@ -21,11 +20,6 @@ const (
 
 	retryDelay = 60 * time.Second
 
-	donateCycle time.Duration = 3600 // seconds
-	// amount of time to keep the donate connection open after donation ends
-	donateShutdownDelay = 30 * time.Second
-	donateTimeout       = 10 * time.Second
-
 	keepAliveInterval = 5 * time.Minute
 )
 
@@ -42,7 +36,7 @@ type Worker interface {
 	// SetID allows proxies to assign this value when a connection is established.
 	SetID(uint64)
 
-	// Workers must implement this method to establish communication with their assigned
+	//SetProxy Workers must implement this method to establish communication with their assigned
 	// proxy.  The proxy connection should be stored in order to 1. Submit Shares and 2. Disconnect Cleanly
 	SetProxy(*Proxy)
 	Proxy() *Proxy
@@ -72,27 +66,17 @@ type Proxy struct {
 	workerIDs chan uint64
 	workers   map[uint64]Worker
 
-	donateInterval time.Duration
-	donateLength   time.Duration
-	donating       bool
-	donateAddr     string
-
 	addWorker chan Worker
 	delWorker chan Worker
 
 	submissions chan *share
-	donations   chan *share
 
-	notify  chan stratum.Notification
-	dnotify chan stratum.Notification // donation jobs
+	notify chan stratum.Notification
 
 	ready bool
 
 	currentJob *Job
 	prevJob    *Job
-
-	donateJob     *Job
-	prevDonateJob *Job
 
 	jobMu     sync.Mutex
 	jobWaiter *sync.WaitGroup // waits for the first job
@@ -106,19 +90,15 @@ func New(id uint64) *Proxy {
 		workerIDs:  make(chan uint64, 5),
 		workers:    make(map[uint64]Worker),
 
-		currentJob:    &Job{},
-		prevJob:       &Job{},
-		donateJob:     &Job{},
-		prevDonateJob: &Job{},
+		currentJob: &Job{},
+		prevJob:    &Job{},
 
 		addWorker: make(chan Worker),
 		delWorker: make(chan Worker, 1),
 
 		submissions: make(chan *share),
-		donations:   make(chan *share),
 
 		ready:     true,
-		donating:  false,
 		jobWaiter: &sync.WaitGroup{},
 	}
 	p.jobWaiter.Add(1)
@@ -127,8 +107,6 @@ func New(id uint64) *Proxy {
 	p.SS = ss
 	p.SS.RegisterName("mining", &Mining{})
 	logger.Get().Debugln("RPC server is listening on proxy ", p.ID)
-
-	p.configureDonations()
 
 	go p.generateIDs()
 	go p.run()
@@ -161,9 +139,7 @@ func (p *Proxy) run() {
 	}
 
 	keepalive := time.NewTicker(keepAliveInterval)
-	donateStart := time.NewTimer(p.donateInterval)
-	donateEnd := time.NewTimer(p.donateLength)
-	donateEnd.Stop() // will be reset after first donate period starts
+
 	defer func() {
 		keepalive.Stop()
 		p.shutdown()
@@ -181,13 +157,6 @@ func (p *Proxy) run() {
 				logger.Get().Println("Banned IP - killing proxy: ", p.ID)
 				return
 			}
-		case s := <-p.donations:
-			logger.Get().Debugln("donating share for job: ", s.JobID)
-			err := p.handleSubmit(s, p.DC) // donate server will handle it's own errors
-			if err != nil {
-				logger.Get().Println("donate submission error: ", err)
-				return
-			}
 		case w := <-p.addWorker:
 			p.receiveWorker(w)
 		case w := <-p.delWorker:
@@ -195,21 +164,7 @@ func (p *Proxy) run() {
 
 		// this comes from the stratum client
 		case notif := <-p.notify:
-			p.handleNotification(notif, false)
-		case notif := <-p.dnotify:
-			p.handleNotification(notif, true)
-
-		// these are based on known regular intervals
-		case <-donateStart.C:
-			// logger.Get().Debugln("Switching to donation server")
-			p.donate()
-			donateEnd.Reset(p.donateLength)
-		case <-donateEnd.C:
-			// logger.Get().Debugln("Finished donation cycle. Cleaning up.")
-			if p.donating {
-				p.undonate()
-			}
-			donateStart.Reset(p.donateInterval)
+			p.handleNotification(notif)
 		case <-keepalive.C:
 			reply := StatusReply{}
 			err := p.SC.Call("keepalived", map[string]string{"id": p.authID}, &reply)
@@ -225,56 +180,12 @@ func (p *Proxy) run() {
 	}
 }
 
-func (p *Proxy) donate() {
-	// logger.Get().Debugln("Dialing out to: ", p.donateAddr)
-	dc, err := stratum.DialTimeout("tcp", p.donateAddr, donateTimeout)
-	if err != nil {
-		logger.Get().Debugln("failed to connect to donate server")
-		return
-	}
-
-	params := map[string]interface{}{}
-	reply := LoginReply{}
-	err = dc.Call("login", params, &reply)
-	if reply.Error != nil {
-		err = reply.Error
-	}
-	if err != nil {
-		logger.Get().Debugln("failed to login to donate server")
-		return
-	}
-
-	p.DC = dc
-	p.jobMu.Lock()
-	p.donating = true
-	p.jobMu.Unlock()
-	p.dnotify = p.DC.Notifications()
-
-	if err = reply.Job.init(); err != nil {
-		logger.Get().Println("bad job from donate login: ", reply.Job, " - err: ", err)
-	} else if err = p.handleDonateJob(reply.Job); err != nil {
-		logger.Get().Println("error handling new job from donation server: ", err)
-	}
-}
-
-func (p *Proxy) undonate() {
-	p.jobMu.Lock()
-	p.donating = false
-	p.jobMu.Unlock()
-	// give client 30 seconds, then DC
-	time.AfterFunc(donateShutdownDelay, func() {
-		// logger.Get().Debugln("Shutting down donation conn")
-		p.DC.Close()
-	})
-	p.handleJob(p.currentJob)
-}
-
 func (p *Proxy) handleJob(job *Job) (err error) {
 	p.jobMu.Lock()
 	p.prevJob, p.currentJob = p.currentJob, job
 	p.jobMu.Unlock()
 
-	if err != nil || p.donating {
+	if err != nil {
 		// logger.Get().Debugln("Skipping regular job broadcast: ", err)
 		return
 	}
@@ -292,27 +203,7 @@ func (p *Proxy) broadcastJob() {
 	}
 }
 
-func (p *Proxy) handleDonateJob(job *Job) (err error) {
-	// we can use the same mutex here right?
-	p.jobMu.Lock()
-	if p.donateJob == nil {
-		p.donateJob = job
-	}
-	p.prevDonateJob, p.donateJob = p.donateJob, job
-	p.jobMu.Unlock()
-
-	// the donate client will remain connected for ~30s after donate period,
-	// so ignore any new jobs at that point
-	if err != nil || !p.donating {
-		// logger.Get().Debugln("Skipping donate job broadcast: ", err)
-		return
-	}
-	// logger.Get().Debugln("Broadcasting new donate job:", job.ID)
-	p.broadcastJob()
-	return
-}
-
-func (p *Proxy) handleNotification(notif stratum.Notification, donate bool) {
+func (p *Proxy) handleNotification(notif stratum.Notification) {
 	switch notif.Method {
 	case "job":
 		job, err := NewJobFromServer(notif.Params.(map[string]interface{}))
@@ -320,11 +211,9 @@ func (p *Proxy) handleNotification(notif stratum.Notification, donate bool) {
 			logger.Get().Println("bad job: ", notif.Params)
 			break
 		}
-		if !donate {
-			err = p.handleJob(job)
-		} else {
-			err = p.handleDonateJob(job)
-		}
+
+		err = p.handleJob(job)
+
 		if err != nil {
 			// log and wait for the next job?
 			logger.Get().Println("error processing job: ", job)
@@ -383,10 +272,6 @@ func (p *Proxy) validateShare(s *share) error {
 		job = p.currentJob
 	case s.JobID == p.prevJob.ID:
 		job = p.prevJob
-	case s.JobID == p.donateJob.ID:
-		job = p.donateJob
-	case s.JobID == p.prevDonateJob.ID:
-		job = p.prevDonateJob
 	default:
 		return ErrBadJobID
 	}
@@ -409,19 +294,6 @@ func (p *Proxy) removeWorker(w Worker) {
 	// potentially check for len(workers) == 0, start timer to spin down proxy if empty
 	// like apache, we might expire a proxy at some point anyway, just to try and reclaim potential resources
 	// in workers map, avert id overflow, etc.
-}
-
-func (p *Proxy) configureDonations() {
-	p.donateAddr = "donate.xmrwasp.com:3333"
-	// p.donateAddr = "localhost:13334"
-	donateLevel := config.Get().DonateLevel
-	if donateLevel <= 0 {
-		donateLevel = 1
-	}
-	p.donateLength = (time.Duration(math.Floor(float64(donateCycle)*(float64(donateLevel)/100))) * time.Second)
-	p.donateInterval = (donateCycle * time.Second) - p.donateLength
-	// logger.Get().Debugln("DonateLength is: ", p.donateLength)
-	// logger.Get().Debugln("DonateInterval is: ", p.donateInterval)
 }
 
 func (p *Proxy) shutdown() {
@@ -489,8 +361,8 @@ func (p *Proxy) Submit(params map[string]interface{}) (*StatusReply, error) {
 	// there might be a race for the job ids's but it shouldn't matter
 	if s.JobID == p.currentJob.ID || s.JobID == p.prevJob.ID {
 		p.submissions <- s
-	} else if s.JobID == p.donateJob.ID || s.JobID == p.prevDonateJob.ID {
-		p.donations <- s
+		//} else if s.JobID == p.donateJob.ID || s.JobID == p.prevDonateJob.ID {
+		//	p.donations <- s
 	} else {
 		return nil, ErrBadJobID
 	}
@@ -504,11 +376,11 @@ func (p *Proxy) NextJob() *Job {
 	p.jobMu.Lock()
 	defer p.jobMu.Unlock()
 	var j *Job
-	if !p.donating {
-		j = p.currentJob.Next()
-	} else {
-		j = p.donateJob.Next()
-	}
+	//if !p.donating {
+	j = p.currentJob.Next()
+	//} else {
+	//	j = p.donateJob.Next()
+	//}
 
 	return j
 }
