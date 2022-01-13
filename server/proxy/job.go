@@ -25,9 +25,10 @@ var (
 
 // Job is a mining job.  Break it up and send chunks to workers.
 type Job struct {
-	Blob   string `json:"blob"`
-	ID     string `json:"job_id"`
-	Target string `json:"target"`
+	Blob     string `json:"blob"`
+	ID       string `json:"job_id"`
+	Target   string `json:"target"`
+	SeedHash string `json:"seed_hash"`
 
 	submittedNonces []string `json:"-"`
 	initialNonce    uint64   `json:"-"`

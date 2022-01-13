@@ -101,16 +101,16 @@ func (d *Director) NextProxy() *Proxy {
 	d.newProxyMu.Lock()
 	defer d.newProxyMu.Unlock()
 	var pr *Proxy
-	for _, p := range d.proxies {
-		if p.isReady() {
-			pr = p
-			break
-		}
-	}
-	if pr == nil {
-		// avoid locking in most cases by looping once first
-		pr = d.addProxy()
-	}
+	//for _, p := range d.proxies {
+	//	if p.isReady() {
+	//		pr = p
+	//		break
+	//	}
+	//}
+	//if pr == nil {
+	//	// avoid locking in most cases by looping once first
+	pr = d.addProxy()
+	//}
 
 	return pr
 }
@@ -124,7 +124,7 @@ func (d *Director) GetStats() *Stats {
 	for ID, p := range d.proxies {
 		proxyIDs = append(proxyIDs, int(ID))
 		totalProxies++
-		totalWorkers += len(p.workers)
+		totalWorkers += 1 //len(p.workers)
 		totalSharesSubmitted += p.shares
 	}
 	recentShares := totalSharesSubmitted - d.lastTotalShares

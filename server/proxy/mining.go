@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"strconv"
 
 	"github.com/sourcegraph/jsonrpc2"
@@ -69,8 +70,29 @@ func (m *Mining) Auth(p PassThruParams, resp *AuthReply) error {
 }
 
 func (m *Mining) Login(p PassThruParams, resp *LoginReply) error {
+	var err error
+	var minerName string
 	worker := m.getWorker(p.Context())
-	resp.Job = worker.Proxy().NextJob()
+	if address, ok := p["login"]; ok {
+		err = worker.Proxy().SetAddress(address.(string))
+	} else {
+		err = errors.New("no login param")
+	}
+	if err != nil {
+		resp.ID = strconv.Itoa(int(worker.ID()))
+		resp.Error = &jsonrpc2.Error{
+			Code:    -1,
+			Message: err.Error(),
+		}
+		return nil
+	}
+
+	if name, ok := p["rig-id"]; ok {
+		minerName = name.(string)
+	}
+
+	go worker.Proxy().Run(minerName)
+	//resp.Job = worker.Proxy().NextJob()
 	resp.ID = strconv.Itoa(int(worker.ID()))
 	resp.Status = "OK"
 

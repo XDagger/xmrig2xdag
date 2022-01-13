@@ -2,6 +2,8 @@ package proxy
 
 import (
 	"errors"
+	"github.com/swordlet/xmrig2xdag/xdag"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -20,7 +22,7 @@ const (
 
 	retryDelay = 60 * time.Second
 
-	keepAliveInterval = 5 * time.Minute
+	timeout = 60 * time.Second
 )
 
 var (
@@ -51,8 +53,7 @@ type Worker interface {
 // Proxy manages a group of workers.
 type Proxy struct {
 	ID       uint64
-	SC       *stratum.Client
-	DC       *stratum.Client
+	Conn     *xdag.Connection
 	SS       *stratum.Server
 	director *Director
 
@@ -61,75 +62,38 @@ type Proxy struct {
 	shares     uint64
 
 	workerCount int
-
-	// workers have to be ID'd so they can be removed when they die
-	workerIDs chan uint64
-	workers   map[uint64]Worker
-
-	addWorker chan Worker
-	delWorker chan Worker
-
+	worker      Worker
 	submissions chan *share
-
-	notify chan stratum.Notification
-
-	ready bool
-
-	currentJob *Job
-	prevJob    *Job
-
-	jobMu     sync.Mutex
-	jobWaiter *sync.WaitGroup // waits for the first job
+	notify      chan []byte
+	ready       bool
+	currentJob  *Job
+	prevJob     *Job
+	jobMu       sync.Mutex
+	addressHash [xdag.HashLength]byte
 }
 
 // New creates a new proxy, starts the work thread, and returns a pointer to it.
 func New(id uint64) *Proxy {
 	p := &Proxy{
-		ID:         id,
-		aliveSince: time.Now(),
-		workerIDs:  make(chan uint64, 5),
-		workers:    make(map[uint64]Worker),
-
-		currentJob: &Job{},
-		prevJob:    &Job{},
-
-		addWorker: make(chan Worker),
-		delWorker: make(chan Worker, 1),
-
+		ID:          id,
+		aliveSince:  time.Now(),
+		currentJob:  &Job{},
+		prevJob:     &Job{},
 		submissions: make(chan *share),
-
-		ready:     true,
-		jobWaiter: &sync.WaitGroup{},
+		ready:       true,
 	}
-	p.jobWaiter.Add(1)
 
 	ss := stratum.NewServer()
 	p.SS = ss
 	p.SS.RegisterName("mining", &Mining{})
 	logger.Get().Debugln("RPC server is listening on proxy ", p.ID)
 
-	go p.generateIDs()
-	go p.run()
 	return p
 }
 
-func (p *Proxy) generateIDs() {
-	var currentWorkerID uint64
-
+func (p *Proxy) Run(minerName string) {
 	for {
-		currentWorkerID++
-		p.workerIDs <- currentWorkerID
-	}
-}
-
-// nextWorkerID returns the next sequential orderID.  It is safe for concurrent use.
-func (p *Proxy) nextWorkerID() uint64 {
-	return <-p.workerIDs
-}
-
-func (p *Proxy) run() {
-	for {
-		err := p.login()
+		err := p.connect(minerName)
 		if err == nil {
 			break
 		}
@@ -138,10 +102,7 @@ func (p *Proxy) run() {
 		<-time.After(retryDelay)
 	}
 
-	keepalive := time.NewTicker(keepAliveInterval)
-
 	defer func() {
-		keepalive.Stop()
 		p.shutdown()
 	}()
 
@@ -149,7 +110,7 @@ func (p *Proxy) run() {
 		select {
 		// these are from workers
 		case s := <-p.submissions:
-			err := p.handleSubmit(s, p.SC)
+			err := p.handleSubmit(s) //, p.SC)
 			if err != nil {
 				logger.Get().Println("share submission error: ", err)
 			}
@@ -157,25 +118,9 @@ func (p *Proxy) run() {
 				logger.Get().Println("Banned IP - killing proxy: ", p.ID)
 				return
 			}
-		case w := <-p.addWorker:
-			p.receiveWorker(w)
-		case w := <-p.delWorker:
-			p.removeWorker(w)
-
-		// this comes from the stratum client
 		case notif := <-p.notify:
 			p.handleNotification(notif)
-		case <-keepalive.C:
-			reply := StatusReply{}
-			err := p.SC.Call("keepalived", map[string]string{"id": p.authID}, &reply)
-			if reply.Error != nil {
-				err = reply.Error
-			}
-			if err != nil {
-				logger.Get().Println("Received error from keepalive request: ", err)
-				return
-			}
-			logger.Get().Debugln("Keepalived response: ", reply)
+
 		}
 	}
 }
@@ -198,69 +143,46 @@ func (p *Proxy) handleJob(job *Job) (err error) {
 // broadcast a job to all workers
 func (p *Proxy) broadcastJob() {
 	logger.Get().Debugln("Broadcasting new job to connected workers.")
-	for _, w := range p.workers {
-		go w.NewJob(p.NextJob())
-	}
+	//for _, w := range p.workers {
+	//	go w.NewJob(p.NextJob())
+	//}
+	p.worker.NewJob(p.NextJob())
 }
 
-func (p *Proxy) handleNotification(notif stratum.Notification) {
-	switch notif.Method {
-	case "job":
-		job, err := NewJobFromServer(notif.Params.(map[string]interface{}))
-		if err != nil {
-			logger.Get().Println("bad job: ", notif.Params)
-			break
-		}
+func (p *Proxy) handleNotification(notif []byte) {
+	job := p.CreateJob(notif)
+	err := p.handleJob(job)
 
-		err = p.handleJob(job)
-
-		if err != nil {
-			// log and wait for the next job?
-			logger.Get().Println("error processing job: ", job)
-			logger.Get().Println(err)
-		}
-	default:
-		logger.Get().Println("Received notification from server: ",
-			"method: ", notif.Method,
-			"params: ", notif.Params,
-		)
+	if err != nil {
+		// log and wait for the next job?
+		logger.Get().Println("error processing job: ", job)
+		logger.Get().Println(err)
 	}
+
 }
 
-func (p *Proxy) login() error {
-	sc, err := stratum.Dial("tcp", config.Get().PoolAddr)
+func (p *Proxy) connect(minerName string) error {
+	conn, err := net.DialTimeout("tcp", config.Get().PoolAddr, timeout)
 	if err != nil {
 		return err
 	}
+
 	logger.Get().Debugln("Client made pool connection.")
-	p.SC = sc
+	//p.SC = sc
+	p.notify = make(chan []byte, 2)
+	p.Conn = xdag.NewConnection(conn, p.ID, p.notify)
+	p.Conn.Start()
 
-	p.notify = p.SC.Notifications()
-	params := map[string]interface{}{
-		"login": config.Get().PoolLogin,
-		"pass":  config.Get().PoolPassword,
+	block := xdag.GenerateFakeBlock()
+	p.Conn.SendBuffMsg(block[:])
+	if minerName != "" {
+		p.Conn.SendBuffMsg([]byte(minerName))
 	}
-	reply := LoginReply{}
-	err = p.SC.Call("login", params, &reply)
-	if err != nil {
-		return err
-	}
+
 	logger.Get().Debugln("Successfully logged into pool.")
-	p.authID = reply.ID
-	if err = reply.Job.init(); err != nil {
-		logger.Get().Println("bad job from login: ", reply.Job, "- err: ", err)
-		// still just wait for the next job
-	} else if err = p.handleJob(reply.Job); err != nil {
-		logger.Get().Println("Error processing job: ", reply.Job)
-		// continue and just wait for the next job?
-		// this shouldn't happen
-	}
 
 	logger.Get().Printf("****    Connected and logged in to pool server: %s \n", config.Get().PoolAddr)
 	logger.Get().Println("****    Broadcasting jobs to workers.")
-
-	// now we have a job, so release jobs
-	p.jobWaiter.Done()
 
 	return nil
 }
@@ -283,40 +205,29 @@ func (p *Proxy) validateShare(s *share) error {
 	return s.validate(job)
 }
 
-func (p *Proxy) receiveWorker(w Worker) {
-	p.workers[w.ID()] = w
-	p.workerCount++
-}
-
-func (p *Proxy) removeWorker(w Worker) {
-	delete(p.workers, w.ID())
-	p.workerCount--
-	// potentially check for len(workers) == 0, start timer to spin down proxy if empty
-	// like apache, we might expire a proxy at some point anyway, just to try and reclaim potential resources
-	// in workers map, avert id overflow, etc.
-}
-
 func (p *Proxy) shutdown() {
 	// kill worker connections - they should connect to a new proxy if active
 	p.ready = false
-	for _, w := range p.workers {
-		w.Disconnect()
-	}
-	<-time.After(1 * time.Minute)
+	//for _, w := range p.workers {
+	//	w.Disconnect()
+	//}
+	p.worker.Disconnect()
+
+	<-time.After(10 * time.Second) //(1 * time.Minute)
 	p.director.removeProxy(p)
 }
 
 func (p *Proxy) isReady() bool {
 	// the worker count read is a race TODO
-	return p.ready && p.workerCount < maxProxyWorkers
+	return p.ready && p.workerCount == 1 // < maxProxyWorkers
 }
 
-func (p *Proxy) handleSubmit(s *share, c *stratum.Client) (err error) {
+func (p *Proxy) handleSubmit(s *share) (err error) {
 	defer func() {
 		close(s.Response)
 		close(s.Error)
 	}()
-	if c == nil {
+	if p.Conn == nil {
 		logger.Get().Println("dropping share due to nil client for job: ", s.JobID)
 		err = errors.New("no client to handle share")
 		s.Error <- err
@@ -330,15 +241,11 @@ func (p *Proxy) handleSubmit(s *share, c *stratum.Client) (err error) {
 		return
 	}
 
-	s.AuthID = p.authID
 	reply := StatusReply{}
-	if err = c.Call("submit", s, &reply); err != nil {
-		s.Error <- err
-		return
-	}
-	if reply.Status == "OK" {
-		p.shares++
-	}
+	shareBytes := p.CreateShare(s)
+	p.Conn.SendBuffMsg(shareBytes)
+	reply.Status = "OK"
+	p.shares++
 
 	// logger.Get().Debugf("proxy %v share submit response: %s", p.ID, reply)
 	s.Response <- &reply
@@ -372,15 +279,10 @@ func (p *Proxy) Submit(params map[string]interface{}) (*StatusReply, error) {
 
 // NextJob gets gets the next job (on the current block) and increments the nonce
 func (p *Proxy) NextJob() *Job {
-	p.jobWaiter.Wait() // only waits for first job from login
 	p.jobMu.Lock()
 	defer p.jobMu.Unlock()
 	var j *Job
-	//if !p.donating {
 	j = p.currentJob.Next()
-	//} else {
-	//	j = p.donateJob.Next()
-	//}
 
 	return j
 }
@@ -388,12 +290,43 @@ func (p *Proxy) NextJob() *Job {
 // Add a worker to the proxy - safe for concurrent use.
 func (p *Proxy) Add(w Worker) {
 	w.SetProxy(p)
-	w.SetID(p.nextWorkerID())
-
-	p.addWorker <- w
+	//w.SetID(p.nextWorkerID())	//
+	//p.addWorker <- w
+	w.SetID(p.ID)
+	p.worker = w
+	p.workerCount = 1
 }
 
 // Remove a worker from the proxy - safe for concurrent use.
 func (p *Proxy) Remove(w Worker) {
-	p.delWorker <- w
+	//p.delWorker <- w
+	p.director.removeProxy(p)
+}
+
+// CreateJob builds a job for distribution to a worker
+func (p *Proxy) CreateJob(blobBytes []byte) *Job {
+	j := &Job{
+		//ID:              id,
+		//Target:          target,
+		//submittedNonces: make([]string, 0),
+	}
+	//nonceBytes := make([]byte, nonceLength, nonceLength)
+	//binary.BigEndian.PutUint32(nonceBytes, nonce)
+	//copy(blobBytes[nonceOffset:nonceOffset+nonceLength], nonceBytes)
+	//j.Blob = hex.EncodeToString(blobBytes)
+
+	return j
+}
+
+func (p *Proxy) CreateShare(s *share) []byte {
+	return []byte{}
+}
+
+func (p *Proxy) SetAddress(a string) error {
+	addressHash, err := xdag.Address2hash(a)
+	if err != nil {
+		return err
+	}
+	p.addressHash = addressHash
+	return nil
 }
