@@ -44,6 +44,8 @@ func SpawnWorker(conn net.Conn) {
 	w.Proxy().SS.ServeCodec(codec)
 
 	w.p.Remove(w)
+
+	w.Disconnect()
 }
 
 func (w *Worker) Conn() net.Conn {

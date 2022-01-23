@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"crypto/tls"
 	"net"
 	"strconv"
 
@@ -14,10 +15,24 @@ func StartServer() {
 	portStr := ":" + strconv.Itoa(tcpPort)
 
 	logger.Get().Debug("Starting TCP listener on port: ", portStr)
-	listener, err := net.Listen("tcp", portStr)
-	if err != nil {
+	var listener net.Listener
+	var listenErr error
+	if config.Get().Tls {
+		cert, err := tls.LoadX509KeyPair(config.Get().CertFile, config.Get().KeyFile)
+		if err != nil {
+			logger.Get().Fatal("Unable to open cert file ", config.Get().CertFile, " or key file ",
+				config.Get().KeyFile)
+			return
+		}
+		tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
+		listener, listenErr = tls.Listen("tcp", portStr, tlsConfig)
+	} else {
+		listener, listenErr = net.Listen("tcp", portStr)
+	}
+
+	if listenErr != nil {
 		logger.Get().Fatal("Unable to listen for tcp connections on port: ", listener.Addr(),
-			" Listen failed with error: ", err)
+			" Listen failed with error: ", listenErr)
 		return
 	}
 	for {

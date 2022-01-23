@@ -72,11 +72,11 @@ func newShare(params map[string]interface{}) *share {
 
 func (s *share) validate(j *Job) error {
 	// normal validate for no duplicate
-	for _, n := range j.submittedNonces {
-		if n == s.Nonce {
-			return ErrDuplicateShare
-		}
-	}
+	//for _, n := range j.submittedNonces {
+	//	if n == s.Nonce {
+	//		return ErrDuplicateShare
+	//	}
+	//}
 
 	validateLevel := config.Get().ShareValidation
 	if validateLevel >= ValidateFormat {
@@ -101,6 +101,15 @@ func (s *share) validate(j *Job) error {
 func (s *share) validateFormat() error {
 	if len(s.Nonce) != 8 || len(s.Result) != 64 {
 		return ErrMalformedShare
+	}
+	_, err := hex.DecodeString(s.Nonce)
+	if err != nil {
+		return err
+	}
+
+	_, err = hex.DecodeString(s.Result)
+	if err != nil {
+		return err
 	}
 	return nil
 }

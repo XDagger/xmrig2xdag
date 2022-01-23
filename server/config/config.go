@@ -29,33 +29,30 @@ var (
 type Config struct {
 	Debug bool `envconfig:"debug" json:"debug"`
 
-	DisableWebsocket bool `envconfig:"noweb" json:"noweb"`
-	DisableTCP       bool `envconfig:"notcp" default:"true" json:"notcp"`
-	WebsocketPort    int  `envconfig:"wsport" default:"8080" json:"wsport"`
-	StratumPort      int  `envconfig:"strport" default:"1111" json:"strport"`
+	StratumPort int `envconfig:"strport" default:"3232" json:"strport"`
 
-	SecureWebsocket bool   `envconfig:"wss" json:"wss"`
-	CertFile        string `envconfig:"tlscert" json:"tlscert"`
-	KeyFile         string `envconfig:"tlskey" json:"tlskey"`
+	CertFile string `envconfig:"tlscert" default:"server.pem" json:"tlscert"`
+	KeyFile  string `envconfig:"tlskey" default:"server.key" json:"tlskey"`
 	// TODO also support TLS for stratum connections
+	Tls bool `envconfig:"tls" json:"tls"`
 
 	// TODO multiple pools for fallback
-	PoolAddr     string `envconfig:"url" required:"true" json:"url"`
-	PoolLogin    string `envconfig:"login" required:"true" json:"login"`
-	PoolPassword string `envconfig:"password" required:"true" json:"password"`
+	PoolAddr string `envconfig:"url" required:"true" json:"url"`
+	//PoolLogin    string `envconfig:"login" required:"true" json:"login"`
+	//PoolPassword string `envconfig:"password" required:"true" json:"password"`
 
 	StatInterval int `envconfig:"stats" default:"60" json:"stats"`
 
 	ShareValidation int `envconfig:"validateshares" json:"validateshares" default:"2"`
 
-	DonateLevel int `envconfig:"donate" default:"2" json:"donate"`
+	//DonateLevel int `envconfig:"donate" default:"2" json:"donate"`
 
 	// LogFile and DiscardLog are mutually exclusive - logfile will be used if present
 	LogFile    string `envconfig:"log" json:"log"`
 	DiscardLog bool   `envconfig:"nolog" json:"nolog"`
 
 	// not yet implemented
-	Background bool `envconfig:"background" json:"background"`
+	//Background bool `envconfig:"background" json:"background"`
 }
 
 // IsMissingConfig returns true if the the error has to do with missing required configs

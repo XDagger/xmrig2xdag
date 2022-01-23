@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 //Connection to XDAG pool
@@ -70,12 +71,17 @@ func (c *Connection) StartReader() {
 		case <-c.ctx.Done():
 			return
 		default:
-			data := make([]byte, 64)
-			if _, err := io.ReadFull(c.Conn, data); err != nil {
+			// 设定连接的等待时长期限
+			err := c.Conn.SetReadDeadline(time.Now().Add(time.Second * 128))
+			if err != nil {
+				return
+			}
+			data := make([]byte, 32)
+
+			if _, err = io.ReadFull(c.Conn, data); err != nil {
 				fmt.Println("read msg head error ", err)
 				return
 			}
-			fmt.Printf("read data %+v\n", data)
 
 			c.jobNotify <- data
 		}

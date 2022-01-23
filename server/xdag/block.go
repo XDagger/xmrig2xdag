@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"github.com/swordlet/xmrig2xdag/config"
 	"unsafe"
 )
 
@@ -14,14 +15,16 @@ const (
 	AddressLength = 32
 	// RawBlockSize is the expected length of the XDAG block
 	RawBlockSize = 512
+	FieldSize    = 32
 
 	bits2mime                   = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 	XDAG_FIELD_HEAD      uint64 = 1
 	XDAG_FIELD_SIGN_OUT  uint64 = 5
 	XDAG_FIELD_HEAD_TEST uint64 = 8
 
-	BLOCK_HEADER_WORD uint64 = 0x3fca9e2b
-	CryptDataSize            = 8
+	BLOCK_HEADER_WORD      uint64 = 0x3fca9e2b
+	WORKERNAME_HEADER_WORD uint32 = 0xf46b9853
+	XDAG_BLOCK_FIELDS             = 16
 )
 
 var (
@@ -42,7 +45,7 @@ func init() {
 }
 
 // Hash2address converts hash to address
-func Hash2address(h [HashLength]byte) string {
+func Hash2address(h []byte) string {
 	address := make([]byte, AddressLength)
 	var c, d, j uint
 	// every 3 bytes(24 bits) hashs convert to 4 chars(6 bit each)
@@ -62,17 +65,24 @@ func Hash2address(h [HashLength]byte) string {
 
 // Address2hash converts address to hash
 func Address2hash(addr string) ([HashLength]byte, error) {
+
 	var hash [HashLength]byte
 	var i, e, n, j uint
 	var c, d uint8
+
+	if len(addr) != 32 {
+		return hash, errors.New("invalid address")
+	}
+	var k = -1
 	// convert 32 byte address to 24 bytes hash
 	// each byte (8 bits) address to 6 bits hash
 	for i = 0; i < AddressLength; i++ {
 		for {
-			c = addr[i]
-			if c == 0 {
+			k += 1
+			if k == 32 {
 				return hash, errors.New("Address string error")
 			}
+			c = addr[k]
 			d = mime2bits[c]
 			if d&0xC0 == 0 {
 				break
@@ -115,7 +125,7 @@ func NewRawBlock(b []byte) RawBlock {
 	// get time from block header
 	r.Timestamp = binary.LittleEndian.Uint64(b[16:24])
 
-	r.Address = Hash2address(r.Hash)
+	r.Address = Hash2address(r.Hash[:])
 	return r
 }
 
@@ -124,9 +134,11 @@ func GenerateFakeBlock() [RawBlockSize]byte {
 	var transportHeader uint64 = 1
 	var amount uint64 = 0
 	var fieldType uint64
-	fieldType = XDAG_FIELD_HEAD | ((XDAG_FIELD_SIGN_OUT * 0x11) << 4)
-	//fieldType = XDAG_FIELD_HEAD_TEST | ((XDAG_FIELD_SIGN_OUT * 0x11) << 4)
-
+	if config.Get().Debug {
+		fieldType = XDAG_FIELD_HEAD_TEST | ((XDAG_FIELD_SIGN_OUT * 0x11) << 4)
+	} else {
+		fieldType = XDAG_FIELD_HEAD | ((XDAG_FIELD_SIGN_OUT * 0x11) << 4)
+	}
 	binary.LittleEndian.PutUint64(block[0:8], transportHeader)
 	binary.LittleEndian.PutUint64(block[8:16], fieldType)
 	binary.LittleEndian.PutUint64(block[16:24], GetXTimestamp())

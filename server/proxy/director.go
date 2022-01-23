@@ -62,7 +62,7 @@ type Stats struct {
 }
 
 func (d *Director) addProxy() *Proxy {
-	p := New(d.nextProxyID())
+	p := NewProxy(d.nextProxyID())
 	p.director = d
 	d.proxies[p.ID] = p
 

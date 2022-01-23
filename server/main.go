@@ -21,10 +21,13 @@ func printWelcomeMessage() {
 	logger.Get().Println("************************************************************************")
 	logger.Get().Printf("*    XMR Stratum to XDAG Proxy \t\t\t\t v%s \n", version)
 
-	if !config.Get().DisableTCP {
-		port := config.Get().StratumPort
-		logger.Get().Printf("*    Accepting XMRig Connections on port: \t\t\t\t %v\n", port)
+	port := config.Get().StratumPort
+	var tls string
+	if config.Get().Tls {
+		tls = "tls"
 	}
+	logger.Get().Printf("*    Accepting XMRig Connections on port: \t\t %v %s\n", port, tls)
+
 	statInterval := config.Get().StatInterval
 	logger.Get().Printf("*    Printing stats every: \t\t\t\t %v seconds\n", statInterval)
 	logger.Get().Println("************************************************************************")
@@ -63,8 +66,8 @@ func setupLogger() {
 }
 
 func main() {
-	//setOptions()
-	//setupLogger()
+	setOptions()
+	setupLogger()
 
 	flag.Usage = usage
 
@@ -76,10 +79,6 @@ func main() {
 	config.File = *configFile
 
 	holdOpen := make(chan bool, 1)
-
-	if config.Get().DisableWebsocket && config.Get().DisableTCP {
-		logger.Get().Fatal("No servers configured for listening.  Bye!")
-	}
 
 	go tcp.StartServer()
 
