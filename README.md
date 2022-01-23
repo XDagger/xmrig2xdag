@@ -1,15 +1,18 @@
-# XMRig2Xdag
-Xdag and XMR are using the same mining algorithm: RandomX.
+# XMRig2XDAG
 
-XMRig2Xdag is a stratum proxy for  Monero (XMR) miners mining Xdag coins. 
+XMRig2XDAG is a stratum proxy for  Monero (XMR) miners mining XDAG coins. 
 
-XMRig2Xdag is translator between XMR stratum protocol and Xdag mining protocol. Written in Go
+XMRig2XDAG is translator between XMR stratum protocol and XDAG mining protocol. Written in Go.
 
-XMRig can connect to Xdag mining pool through XMRig2Xdag proxy.
+XMRig can connect to XDAG mining pool through XMRig2XDAG proxy.
+
+XDAG and XMR are using the same mining algorithm: RandomX.
 
 
 ## Acknowledgement
 https://github.com/xmrig/xmrig
+
+https://github.com/xmrig/xmrig-proxy
 
 https://github.com/trey-jones/stratum
 
