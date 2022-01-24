@@ -141,7 +141,7 @@ func (j *Job) Next() *Job {
 func (j *Job) getTargetUint64() (uint64, error) {
 	target := j.Target
 	if len(target) == 8 {
-		target += "00000000"
+		target = "00000000" + target
 	}
 	if len(target) != 16 {
 		logger.Get().Println("Job target format is : ", target)
@@ -152,5 +152,5 @@ func (j *Job) getTargetUint64() (uint64, error) {
 		return 0, err
 	}
 
-	return binary.BigEndian.Uint64(targetBytes), nil
+	return binary.LittleEndian.Uint64(targetBytes), nil
 }

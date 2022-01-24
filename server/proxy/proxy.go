@@ -30,6 +30,10 @@ const (
 	timeout = 60 * time.Second
 
 	xdagAlgo = `rx/xdag`
+
+	difficultyCount = 16
+
+	submitInterval = 5
 )
 
 var crc32table = crc32.MakeTable(0xEDB88320)
@@ -87,6 +91,7 @@ type Proxy struct {
 	fieldIn   uint64
 	recvCount int
 	recvByte  [2 * xdag.HashLength]byte
+	target    string
 }
 
 func init() {
@@ -219,7 +224,7 @@ func (p *Proxy) connect(minerName string) error {
 	logger.Get().Debugln("Client made pool connection.")
 	//p.SC = sc
 	p.notify = make(chan []byte, 2)
-	p.Conn = xdag.NewConnection(conn, p.ID, p.notify)
+	p.Conn = xdag.NewConnection(conn, p.ID, p.notify, p.done)
 	p.Conn.Start()
 
 	block := xdag.GenerateFakeBlock()
@@ -316,6 +321,11 @@ func (p *Proxy) handleSubmit(s *share) (err error) {
 	}
 	reply.Status = "OK"
 	p.shares++
+	if p.shares == 1 {
+		p.aliveSince = time.Now()
+	} else if p.shares == difficultyCount+1 {
+		p.setTarget()
+	}
 
 	// logger.Get().Debugf("proxy %v share submit response: %s", p.ID, reply)
 	s.Response <- &reply
@@ -422,5 +432,28 @@ func (p *Proxy) SetAddress(a string) error {
 }
 
 func (p *Proxy) getTarget() string {
-	return "3f8d0600"
+	if p.target == "" {
+		return "b88d0600" //difficulty = 10000
+	} else {
+		return p.target
+	}
+
+}
+
+func (p *Proxy) setTarget() {
+	p.jobMu.Lock()
+	defer p.jobMu.Unlock()
+	var b [8]byte
+	t := time.Now()
+	duration := t.Sub(p.aliveSince)
+	//hashRate := (float64(10000) * difficultyCount) / duration.Seconds()
+	//difficulty := hashRate * submitInterval
+	//target := uint64(float64(0xFFFFFFFFFFFFFFFF) / difficulty)
+
+	difficulty := (float64(10000) * difficultyCount * submitInterval) / duration.Seconds()
+	target := uint64(float64(0xFFFFFFFFFFFFFFFF) / difficulty)
+
+	binary.LittleEndian.PutUint64(b[:], target)
+	p.target = hex.EncodeToString(b[4:])
+	fmt.Println("new target: ", p.target)
 }
