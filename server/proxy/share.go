@@ -155,5 +155,5 @@ func (s *share) getResultUint64() (uint64, error) {
 
 	valueBytes := resultBytes[shareValueOffset : shareValueOffset+shareValueLength]
 
-	return binary.BigEndian.Uint64(valueBytes), nil
+	return binary.LittleEndian.Uint64(valueBytes), nil
 }

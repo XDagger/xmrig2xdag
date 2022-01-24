@@ -19,12 +19,13 @@ type Connection struct {
 	cancel      context.CancelFunc //cancel channel
 	msgBuffChan chan []byte        //buffered message channel
 	isClosed    bool               //closed flag
-	isMulti     bool               // multiple works
-	worksCounts int
-	jobNotify   chan []byte
+	//isMulti     bool               // multiple works
+	//worksCounts int
+	jobNotify chan []byte
+	done      chan int
 }
 
-func NewConnection(conn net.Conn, connID uint64, notify chan []byte) *Connection {
+func NewConnection(conn net.Conn, connID uint64, notify chan []byte, done chan int) *Connection {
 	//initialization
 	c := &Connection{
 		Conn:        conn,
@@ -32,6 +33,7 @@ func NewConnection(conn net.Conn, connID uint64, notify chan []byte) *Connection
 		isClosed:    false,
 		msgBuffChan: make(chan []byte, 8),
 		jobNotify:   notify,
+		done:        done,
 	}
 
 	return c
@@ -117,6 +119,7 @@ func (c *Connection) Stop() {
 	close(c.msgBuffChan)
 	//set flag
 	c.isClosed = true
+	c.done <- 1
 
 }
 

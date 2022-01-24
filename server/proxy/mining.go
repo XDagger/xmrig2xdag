@@ -84,9 +84,9 @@ func (m *Mining) Login(p PassThruParams, resp *LoginReply) error {
 	//resp.Job = worker.Proxy().NextJob()
 	resp.ID = strconv.Itoa(int(worker.ID()))
 	resp.Status = "OK"
-	resp.Job = &Job{
+	resp.Job = &Job{ // return a fake job before proxy connect XDAG pool
 		ID:       "FFFFFFFFFF" + NewLen(18),
-		Target:   "3f8d0600",
+		Target:   "b88d0600", //difficulty = 10000
 		Algo:     xdagAlgo,
 		Blob:     "070780e6b9d60586ba419a0c224e3c6c3e134cc45c4fa04d8ee2d91c2595463c57eef0a4f0796c000000002fcc4d62fa6c77e76c30017c768be5c61d83ec9d3a",
 		SeedHash: "e1364b8782719d7683e2ccd3d8f724bc59dfa780a9e960e7c0e0046acdb40100",
