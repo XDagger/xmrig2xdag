@@ -31,9 +31,11 @@ const (
 
 	xdagAlgo = `rx/xdag`
 
-	difficultyCount = 16
+	initDiffCount = 16
 
-	submitInterval = 5
+	refreshDiffCount uint64 = 128 // count of shares to refresh target
+
+	submitInterval = 7
 )
 
 var crc32table = crc32.MakeTable(0xEDB88320)
@@ -86,12 +88,13 @@ type Proxy struct {
 	addressHash [xdag.HashLength]byte
 	address     string
 
-	crypt     unsafe.Pointer
-	fieldOut  uint64
-	fieldIn   uint64
-	recvCount int
-	recvByte  [2 * xdag.HashLength]byte
-	target    string
+	crypt       unsafe.Pointer
+	fieldOut    uint64
+	fieldIn     uint64
+	recvCount   int
+	recvByte    [2 * xdag.HashLength]byte
+	target      string
+	targetSince time.Time
 }
 
 func init() {
@@ -160,10 +163,10 @@ func (p *Proxy) handleJob(job *Job) (err error) {
 	p.currentJob = job
 	p.jobMu.Unlock()
 
-	if err != nil {
-		// logger.Get().Debugln("Skipping regular job broadcast: ", err)
-		return
-	}
+	//if err != nil {
+	//	// logger.Get().Debugln("Skipping regular job broadcast: ", err)
+	//	return
+	//}
 
 	// logger.Get().Debugln("Broadcasting new regular job: ", job.ID)
 	p.broadcastJob()
@@ -276,6 +279,7 @@ func (p *Proxy) validateShare(s *share) error {
 }
 
 func (p *Proxy) shutdown() {
+	logger.Get().Printf("proxy [ %d ] shutdown\n", p.ID)
 	// kill worker connections - they should connect to a new proxy if active
 	p.ready = false
 	//for _, w := range p.workers {
@@ -322,9 +326,11 @@ func (p *Proxy) handleSubmit(s *share) (err error) {
 	reply.Status = "OK"
 	p.shares++
 	if p.shares == 1 {
-		p.aliveSince = time.Now()
-	} else if p.shares == difficultyCount+1 {
-		p.setTarget()
+		p.targetSince = time.Now()
+	} else if p.shares == initDiffCount+1 {
+		p.setTarget(p.shares)
+	} else if p.shares/128 > 0 && p.shares%128 == initDiffCount+1 {
+		p.setTarget(p.shares)
 	}
 
 	// logger.Get().Debugf("proxy %v share submit response: %s", p.ID, reply)
@@ -440,20 +446,41 @@ func (p *Proxy) getTarget() string {
 
 }
 
-func (p *Proxy) setTarget() {
+func (p *Proxy) setTarget(shareIndex uint64) {
 	p.jobMu.Lock()
 	defer p.jobMu.Unlock()
 	var b [8]byte
 	t := time.Now()
-	duration := t.Sub(p.aliveSince)
-	//hashRate := (float64(10000) * difficultyCount) / duration.Seconds()
+	duration := t.Sub(p.targetSince)
+	//hashRate := (float64(10000) * initDiffCount) / duration.Seconds()
 	//difficulty := hashRate * submitInterval
 	//target := uint64(float64(0xFFFFFFFFFFFFFFFF) / difficulty)
 
-	difficulty := (float64(10000) * difficultyCount * submitInterval) / duration.Seconds()
-	target := uint64(float64(0xFFFFFFFFFFFFFFFF) / difficulty)
+	//difficulty := (float64(10000) * diffCount * submitInterval) / duration.Seconds()
+	//target := uint64(float64(0xFFFFFFFFFFFFFFFF) / difficulty)
 
-	binary.LittleEndian.PutUint64(b[:], target)
+	var diffCount float64
+	if shareIndex == initDiffCount+1 {
+		diffCount = float64(initDiffCount)
+	} else {
+		diffCount = float64(refreshDiffCount)
+	}
+	targetStr := "00000000" + p.getTarget()
+	targetBytes, err := hex.DecodeString(targetStr)
+	if err != nil {
+		return
+	}
+	target := binary.LittleEndian.Uint64(targetBytes)
+
+	// difficulty = 1/target = uint64(float64(0xFFFFFFFFFFFFFFFF) / target)
+	// target = uint64(float64(0xFFFFFFFFFFFFFFFF) / difficulty)
+	// difficult = hashRate * calculateDuration
+	// target : newTarget = duration : submitInterval
+
+	newTarget := uint64(float64(target) * duration.Seconds() / (diffCount * submitInterval))
+
+	binary.LittleEndian.PutUint64(b[:], newTarget)
 	p.target = hex.EncodeToString(b[4:])
+	p.targetSince = t
 	fmt.Println("new target: ", p.target)
 }

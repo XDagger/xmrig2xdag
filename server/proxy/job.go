@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -153,4 +154,21 @@ func (j *Job) getTargetUint64() (uint64, error) {
 	}
 
 	return binary.LittleEndian.Uint64(targetBytes), nil
+}
+
+func createFakeJob() *Job {
+	b := make([]byte, 64)
+	var blob string
+	if _, err := rand.Read(b); err != nil {
+		blob = "070780e6b9d60586ba419a0c224e3c6c3e134cc45c4fa04d8ee2d91c2595463c57eef0a4f0796c000000002fcc4d62fa6c77e76c30017c768be5c61d83ec9d3a"
+	}
+	blob = hex.EncodeToString(b)
+	fmt.Println(blob)
+	return &Job{ // return a fake job before proxy connect XDAG pool
+		ID:       "FFFFFFFFFF" + NewLen(18),
+		Target:   "b88d0600", //difficulty = 10000
+		Algo:     xdagAlgo,
+		Blob:     blob,
+		SeedHash: "e1364b8782719d7683e2ccd3d8f724bc59dfa780a9e960e7c0e0046acdb40100",
+	}
 }
