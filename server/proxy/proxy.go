@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"github.com/swordlet/xmrig2xdag/config"
 	"github.com/swordlet/xmrig2xdag/logger"
 	"github.com/swordlet/xmrig2xdag/stratum"
@@ -424,7 +423,7 @@ func (p *Proxy) Remove(w Worker) {
 // CreateJob builds a job for distribution to a worker
 func (p *Proxy) CreateJob(blobBytes []byte) *Job {
 
-	fmt.Println("read: ", hex.EncodeToString(blobBytes[:]))
+	logger.Get().Println("read: ", hex.EncodeToString(blobBytes[:]))
 
 	nonce := rand.Uint64() // initial random nonce
 	j := &Job{
@@ -443,8 +442,8 @@ func (p *Proxy) CreateJob(blobBytes []byte) *Job {
 	binary.BigEndian.PutUint64(nonceBytes, nonce) // last 8 bytes for nonce
 	copy(j.currentBlob[initNonceOffset:initNonceOffset+initNonceLength], nonceBytes)
 	j.Blob = hex.EncodeToString(j.currentBlob)
-	fmt.Println("job blob: ", j.Blob)
-	fmt.Println("seed: ", j.SeedHash)
+	logger.Get().Println("job blob: ", j.Blob)
+	logger.Get().Println("seed: ", j.SeedHash)
 	return j
 }
 
@@ -521,5 +520,5 @@ func (p *Proxy) setTarget(shareIndex uint64) {
 	binary.LittleEndian.PutUint64(b[:], newTarget)
 	p.target = hex.EncodeToString(b[4:])
 	p.targetSince = t
-	fmt.Println("new target: ", p.target)
+	logger.Get().Println("new target: ", p.target)
 }

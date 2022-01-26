@@ -3,7 +3,7 @@ package xdag
 import (
 	"context"
 	"errors"
-	"fmt"
+	"github.com/swordlet/xmrig2xdag/logger"
 	"io"
 	"net"
 	"sync"
@@ -41,19 +41,19 @@ func NewConnection(conn net.Conn, connID uint64, notify chan []byte, done chan i
 
 //StartWriter write message Goroutine, send message to XDAG pool
 func (c *Connection) StartWriter() {
-	fmt.Println("[Writer Goroutine is running]")
-	defer fmt.Println(c.RemoteAddr().String(), "[conn Writer exit!]")
+	logger.Get().Println("[Writer Goroutine is running]")
+	defer logger.Get().Println(c.RemoteAddr().String(), "[conn Writer exit!]")
 
 	for {
 		select {
 		case data, ok := <-c.msgBuffChan:
 			if ok {
 				if _, err := c.Conn.Write(data); err != nil {
-					fmt.Println("Send Buff Data error:, ", err, " Conn Writer exit")
+					logger.Get().Println("Send Buff Data error:, ", err, " Conn Writer exit")
 					return
 				}
 			} else {
-				fmt.Println("msgBuffChan is Closed")
+				logger.Get().Println("msgBuffChan is Closed")
 				break
 			}
 		case <-c.ctx.Done():
@@ -64,8 +64,8 @@ func (c *Connection) StartWriter() {
 
 //StartReader read message Goroutine, receive message from XDAG pool
 func (c *Connection) StartReader() {
-	fmt.Println("[Reader Goroutine is running]")
-	defer fmt.Println(c.RemoteAddr().String(), "[conn Reader exit!]")
+	logger.Get().Println("[Reader Goroutine is running]")
+	defer logger.Get().Println(c.RemoteAddr().String(), "[conn Reader exit!]")
 	defer c.Stop()
 
 	for {
@@ -81,7 +81,7 @@ func (c *Connection) StartReader() {
 			data := make([]byte, 32)
 
 			if _, err = io.ReadFull(c.Conn, data); err != nil {
-				fmt.Println("read msg head error ", err)
+				logger.Get().Println("read msg head error ", err)
 				return
 			}
 
@@ -109,7 +109,7 @@ func (c *Connection) Stop() {
 		return
 	}
 
-	fmt.Println("Conn Stop()...ConnID = ", c.ConnID)
+	logger.Get().Println("Conn Stop()...ConnID = ", c.ConnID)
 
 	c.Conn.Close()
 	//close writer

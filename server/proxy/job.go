@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"github.com/swordlet/xmrig2xdag/logger"
 	"math"
 )
@@ -104,7 +103,7 @@ func (j *Job) Next() *Job {
 	copy(nextJob.currentBlob[nonceOffset:nonceOffset+nonceLength], nonceBytes)
 	nextJob.Blob = hex.EncodeToString(nextJob.currentBlob)
 
-	fmt.Println("next, job blob: ", nextJob.Blob, ", nonce: ", hex.EncodeToString(nonceBytes))
+	logger.Get().Println("next, job blob: ", nextJob.Blob, ", nonce: ", hex.EncodeToString(nonceBytes))
 	return nextJob
 }
 
