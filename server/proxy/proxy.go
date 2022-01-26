@@ -123,8 +123,7 @@ func NewProxy(id uint64) *Proxy {
 		miniResult:  math.MaxUint64,
 	}
 
-	ss := stratum.NewServer()
-	p.SS = ss
+	p.SS = stratum.NewServer()
 	p.SS.RegisterName("mining", &Mining{})
 	logger.Get().Debugln("RPC server is listening on proxy ", p.ID)
 
@@ -429,7 +428,7 @@ func (p *Proxy) Remove(w Worker) {
 // CreateJob builds a job for distribution to a worker
 func (p *Proxy) CreateJob(blobBytes []byte) *Job {
 
-	logger.Get().Println("read: ", hex.EncodeToString(blobBytes[:]))
+	logger.Get().Debugln("read: ", hex.EncodeToString(blobBytes[:]))
 
 	nonce := rand.Uint64() // initial random nonce
 	j := &Job{
@@ -448,8 +447,8 @@ func (p *Proxy) CreateJob(blobBytes []byte) *Job {
 	binary.BigEndian.PutUint64(nonceBytes, nonce) // last 8 bytes for nonce
 	copy(j.currentBlob[initNonceOffset:initNonceOffset+initNonceLength], nonceBytes)
 	j.Blob = hex.EncodeToString(j.currentBlob)
-	logger.Get().Println("job blob: ", j.Blob)
-	logger.Get().Println("seed: ", j.SeedHash)
+	logger.Get().Debugln("job blob: ", j.Blob)
+	logger.Get().Debugln("seed: ", j.SeedHash)
 	return j
 }
 

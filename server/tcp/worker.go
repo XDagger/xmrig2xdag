@@ -24,14 +24,14 @@ type Worker struct {
 	// this is not ideal, and it would be nice to do this differently
 	codec *stratum.DefaultServerCodec
 
-	jobs chan *proxy.Job
+	//jobs chan *proxy.Job
 }
 
 // SpawnWorker spawns a new TCP worker and adds it to a proxy
 func SpawnWorker(conn net.Conn) {
 	w := &Worker{
 		conn: conn,
-		jobs: make(chan *proxy.Job),
+		//jobs: make(chan *proxy.Job),
 	}
 	ctx := context.WithValue(context.Background(), "worker", w)
 	codec := stratum.NewDefaultServerCodecContext(ctx, w.Conn())
