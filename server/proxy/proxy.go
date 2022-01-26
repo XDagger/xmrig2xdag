@@ -10,6 +10,7 @@ import (
 	"github.com/swordlet/xmrig2xdag/stratum"
 	"github.com/swordlet/xmrig2xdag/xdag"
 	"hash/crc32"
+	"math"
 	"math/rand"
 	"net"
 	"strings"
@@ -35,7 +36,7 @@ const (
 
 	refreshDiffCount uint64 = 128 // count of shares to refresh target
 
-	submitInterval = 7
+	submitInterval = 5
 )
 
 var crc32table = crc32.MakeTable(0xEDB88320)
@@ -95,6 +96,9 @@ type Proxy struct {
 	recvByte    [2 * xdag.HashLength]byte
 	target      string
 	targetSince time.Time
+	lastSend    time.Time
+	miniResult  uint64
+	miniNonce   uint32
 }
 
 func init() {
@@ -111,6 +115,8 @@ func NewProxy(id uint64) *Proxy {
 		submissions: make(chan *share),
 		done:        make(chan int),
 		ready:       true,
+		lastSend:    time.Now(),
+		miniResult:  math.MaxUint64,
 	}
 
 	ss := stratum.NewServer()
@@ -161,6 +167,10 @@ func (p *Proxy) handleJob(job *Job) (err error) {
 	p.jobMu.Lock()
 	//p.prevJob, p.currentJob = p.currentJob, job
 	p.currentJob = job
+
+	p.miniResult = math.MaxUint64
+	p.lastSend = time.Now()
+
 	p.jobMu.Unlock()
 
 	//if err != nil {
@@ -317,11 +327,32 @@ func (p *Proxy) handleSubmit(s *share) (err error) {
 			s.Error <- err
 			return
 		}
+		p.jobMu.Lock()
+		resBytes, _ := hex.DecodeString(s.Result)
+		nonceBytes, _ := hex.DecodeString(s.Nonce)
+		result := binary.LittleEndian.Uint64(resBytes[len(resBytes)-8:])
+		t := time.Now()
+		if t.Sub(p.lastSend) >= 4*time.Second {
+			var shareBytes []byte
+			if result < p.miniResult {
+				shareBytes = p.CreateShare(s)
+			} else {
+				shareBytes = p.MakeShare(p.miniResult, p.miniNonce)
+			}
 
-		shareBytes := p.CreateShare(s)
-		xdag.EncryptField(p.crypt, unsafe.Pointer(&shareBytes[0]), p.fieldOut)
-		p.fieldOut += 1
-		p.Conn.SendBuffMsg(shareBytes)
+			xdag.EncryptField(p.crypt, unsafe.Pointer(&shareBytes[0]), p.fieldOut)
+			p.fieldOut += 1
+			p.Conn.SendBuffMsg(shareBytes)
+
+			p.miniResult = math.MaxUint64
+			p.lastSend = t
+		} else {
+			if result < p.miniResult {
+				p.miniResult = result
+				p.miniNonce = binary.LittleEndian.Uint32(nonceBytes[:])
+			}
+		}
+		p.jobMu.Unlock()
 	}
 	reply.Status = "OK"
 	p.shares++
@@ -423,7 +454,15 @@ func (p *Proxy) CreateShare(s *share) []byte {
 	var result [32]byte
 	copy(result[:28], p.currentJob.currentBlob[32:60])
 	copy(result[28:32], nonceBytes[:])
-	fmt.Println("nonce: ", s.Nonce, ", share result: ", s.Result)
+	logger.Get().Debugln("nonce: ", s.Nonce, ", share result: ", s.Result)
+	return result[:]
+}
+
+func (p *Proxy) MakeShare(miniResult uint64, miniNonce uint32) []byte {
+	var result [32]byte
+	copy(result[:28], p.currentJob.currentBlob[32:60])
+	binary.LittleEndian.PutUint32(result[28:32], miniNonce)
+	logger.Get().Debugf("nonce: %08x, share result: %016x", miniNonce, miniResult)
 	return result[:]
 }
 
