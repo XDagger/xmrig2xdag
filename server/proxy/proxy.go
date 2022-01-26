@@ -33,7 +33,8 @@ const (
 
 	initDiffCount = 16
 
-	refreshDiffCount uint64 = 128 // count of shares to refresh target
+	//refreshDiffCount uint64 = 128 // count of shares to refresh target
+	refreshDiffInterval = 5 * time.Minute
 
 	submitInterval = 5
 )
@@ -84,20 +85,24 @@ type Proxy struct {
 	ready       bool
 	currentJob  *Job
 	//prevJob     *Job
-	jobMu       sync.Mutex
+	jobMu sync.Mutex
+
 	addressHash [xdag.HashLength]byte
 	address     string
 
-	crypt       unsafe.Pointer
-	fieldOut    uint64
-	fieldIn     uint64
-	recvCount   int
-	recvByte    [2 * xdag.HashLength]byte
+	crypt    unsafe.Pointer
+	fieldOut uint64
+	fieldIn  uint64
+
+	recvCount int
+	recvByte  [2 * xdag.HashLength]byte
+
 	target      string
 	targetSince time.Time
 	lastSend    time.Time
 	miniResult  uint64
 	miniNonce   uint32
+	targetShare uint64
 }
 
 func init() {
@@ -359,8 +364,9 @@ func (p *Proxy) handleSubmit(s *share) (err error) {
 		p.targetSince = time.Now()
 	} else if p.shares == initDiffCount+1 {
 		p.setTarget(p.shares)
-	} else if p.shares/128 > 0 && p.shares%128 == initDiffCount+1 {
+	} else if p.shares > initDiffCount+1 && time.Now().Sub(p.targetSince) >= refreshDiffInterval {
 		p.setTarget(p.shares)
+
 	}
 
 	// logger.Get().Debugf("proxy %v share submit response: %s", p.ID, reply)
@@ -501,7 +507,7 @@ func (p *Proxy) setTarget(shareIndex uint64) {
 	if shareIndex == initDiffCount+1 {
 		diffCount = float64(initDiffCount)
 	} else {
-		diffCount = float64(refreshDiffCount)
+		diffCount = float64(p.shares - p.targetShare) //float64(refreshDiffCount)
 	}
 	targetStr := "00000000" + p.getTarget()
 	targetBytes, err := hex.DecodeString(targetStr)
@@ -520,5 +526,6 @@ func (p *Proxy) setTarget(shareIndex uint64) {
 	binary.LittleEndian.PutUint64(b[:], newTarget)
 	p.target = hex.EncodeToString(b[4:])
 	p.targetSince = t
+	p.targetShare = p.shares
 	logger.Get().Println("new target: ", p.target)
 }
