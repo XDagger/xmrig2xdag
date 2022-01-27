@@ -214,6 +214,10 @@ func (p *Proxy) handleNotification(notif []byte) {
 		p.recvCount = 0
 		copy(p.recvByte[32:], data[:])
 
+		if p.shares > initDiffCount+1 && time.Now().Sub(p.targetSince) >= refreshDiffInterval {
+			p.setTarget(p.shares)
+		}
+
 		job := p.CreateJob(p.recvByte[:])
 		err := p.handleJob(job)
 
@@ -363,10 +367,12 @@ func (p *Proxy) handleSubmit(s *share) (err error) {
 		p.targetSince = time.Now()
 	} else if p.shares == initDiffCount+1 {
 		p.setTarget(p.shares)
-	} else if p.shares > initDiffCount+1 && time.Now().Sub(p.targetSince) >= refreshDiffInterval {
-		p.setTarget(p.shares)
-
 	}
+
+	//else if p.shares > initDiffCount+1 && time.Now().Sub(p.targetSince) >= refreshDiffInterval {
+	//	p.setTarget(p.shares)
+	//
+	//}
 
 	// logger.Get().Debugf("proxy %v share submit response: %s", p.ID, reply)
 	s.Response <- &reply
@@ -526,5 +532,5 @@ func (p *Proxy) setTarget(shareIndex uint64) {
 	p.target = hex.EncodeToString(b[4:])
 	p.targetSince = t
 	p.targetShare = p.shares
-	logger.Get().Println("new target: ", p.target)
+	logger.Get().Printf("proxy [%d]new target:%s\n", p.ID, p.target)
 }
