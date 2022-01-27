@@ -69,7 +69,7 @@ func Configure(c *Config) {
 // New makes a new logger with config.
 func New(c *Config) *Logger {
 	return &Logger{
-		log.New(c.W, "[XMR2XDAG] ", c.Flag),
+		log.New(c.W, "[XDAG_PROXY] ", c.Flag),
 		c.Level,
 	}
 }

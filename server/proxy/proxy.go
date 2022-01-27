@@ -34,7 +34,7 @@ const (
 	initDiffCount = 16
 
 	//refreshDiffCount uint64 = 128 // count of shares to refresh target
-	refreshDiffInterval = 5 * time.Minute
+	refreshDiffInterval = 10 * time.Minute
 
 	submitInterval = 5
 )
@@ -214,6 +214,10 @@ func (p *Proxy) handleNotification(notif []byte) {
 		p.recvCount = 0
 		copy(p.recvByte[32:], data[:])
 
+		if p.shares > initDiffCount+1 && time.Now().Sub(p.targetSince) >= refreshDiffInterval {
+			p.setTarget(p.shares)
+		}
+
 		job := p.CreateJob(p.recvByte[:])
 		err := p.handleJob(job)
 
@@ -267,8 +271,8 @@ func (p *Proxy) connect(minerName string) error {
 
 	logger.Get().Debugln("Successfully logged into pool.")
 
-	logger.Get().Printf("****    Connected and logged in to pool server: %s \n", config.Get().PoolAddr)
-	logger.Get().Println("****    Broadcasting jobs to workers.")
+	logger.Get().Printf("****    Proxy [%d] Connected to pool server: %s \n", p.ID, config.Get().PoolAddr)
+	//logger.Get().Println("****    Broadcasting jobs to workers.")
 
 	return nil
 }
@@ -292,7 +296,7 @@ func (p *Proxy) validateShare(s *share) error {
 }
 
 func (p *Proxy) shutdown() {
-	logger.Get().Printf("proxy [ %d ] shutdown\n", p.ID)
+	logger.Get().Printf("proxy [%d] shutdown\n", p.ID)
 	// kill worker connections - they should connect to a new proxy if active
 	p.ready = false
 	//for _, w := range p.workers {
@@ -363,10 +367,12 @@ func (p *Proxy) handleSubmit(s *share) (err error) {
 		p.targetSince = time.Now()
 	} else if p.shares == initDiffCount+1 {
 		p.setTarget(p.shares)
-	} else if p.shares > initDiffCount+1 && time.Now().Sub(p.targetSince) >= refreshDiffInterval {
-		p.setTarget(p.shares)
-
 	}
+
+	//else if p.shares > initDiffCount+1 && time.Now().Sub(p.targetSince) >= refreshDiffInterval {
+	//	p.setTarget(p.shares)
+	//
+	//}
 
 	// logger.Get().Debugf("proxy %v share submit response: %s", p.ID, reply)
 	s.Response <- &reply
@@ -526,5 +532,5 @@ func (p *Proxy) setTarget(shareIndex uint64) {
 	p.target = hex.EncodeToString(b[4:])
 	p.targetSince = t
 	p.targetShare = p.shares
-	logger.Get().Println("new target: ", p.target)
+	logger.Get().Printf("proxy [%d]new target:%s\n", p.ID, p.target)
 }

@@ -19,17 +19,17 @@ var (
 
 func printWelcomeMessage() {
 	logger.Get().Println("************************************************************************")
-	logger.Get().Printf("*    XMR Stratum to XDAG Proxy \t\t\t\t v%s \n", version)
+	logger.Get().Printf("*    XMR Stratum to XDAG Proxy \t\t\t\t v%s \t\t\t\t*\n", version)
 
 	port := config.Get().StratumPort
-	var tls string
-	if config.Get().Tls {
-		tls = "tls"
-	}
-	logger.Get().Printf("*    Accepting XMRig Connections on port: \t\t %v %s\n", port, tls)
+	//var tls string
+	//if config.Get().Tls {
+	//	tls = "tls"
+	//}
+	logger.Get().Printf("*    Accepting XMRig Connections on port: \t\t %v\t\t\t\t\t*\n", port)
 
 	statInterval := config.Get().StatInterval
-	logger.Get().Printf("*    Printing stats every: \t\t\t\t %v seconds\n", statInterval)
+	logger.Get().Printf("*    Printing stats every: \t\t\t\t\t %v seconds\t\t\t\t*\n", statInterval)
 	logger.Get().Println("************************************************************************")
 }
 
