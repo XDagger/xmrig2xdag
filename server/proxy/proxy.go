@@ -34,7 +34,7 @@ const (
 	initDiffCount = 16
 
 	//refreshDiffCount uint64 = 128 // count of shares to refresh target
-	refreshDiffInterval = 5 * time.Minute
+	refreshDiffInterval = 10 * time.Minute
 
 	submitInterval = 5
 )
@@ -267,8 +267,8 @@ func (p *Proxy) connect(minerName string) error {
 
 	logger.Get().Debugln("Successfully logged into pool.")
 
-	logger.Get().Printf("****    Connected and logged in to pool server: %s \n", config.Get().PoolAddr)
-	logger.Get().Println("****    Broadcasting jobs to workers.")
+	logger.Get().Printf("****    Proxy [%d] Connected to pool server: %s \n", p.ID, config.Get().PoolAddr)
+	//logger.Get().Println("****    Broadcasting jobs to workers.")
 
 	return nil
 }
@@ -292,7 +292,7 @@ func (p *Proxy) validateShare(s *share) error {
 }
 
 func (p *Proxy) shutdown() {
-	logger.Get().Printf("proxy [ %d ] shutdown\n", p.ID)
+	logger.Get().Printf("proxy [%d] shutdown\n", p.ID)
 	// kill worker connections - they should connect to a new proxy if active
 	p.ready = false
 	//for _, w := range p.workers {

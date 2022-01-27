@@ -42,7 +42,7 @@ func NewConnection(conn net.Conn, connID uint64, notify chan []byte, done chan i
 //StartWriter write message Goroutine, send message to XDAG pool
 func (c *Connection) StartWriter() {
 	logger.Get().Debugln("[Writer Goroutine is running]")
-	defer logger.Get().Println(c.RemoteAddr().String(), "[conn Writer exit!]")
+	defer logger.Get().Debugln(c.RemoteAddr().String(), "[conn Writer exit!]")
 
 	for {
 		select {
@@ -64,8 +64,8 @@ func (c *Connection) StartWriter() {
 
 //StartReader read message Goroutine, receive message from XDAG pool
 func (c *Connection) StartReader() {
-	logger.Get().Println("[Reader Goroutine is running]")
-	defer logger.Get().Println(c.RemoteAddr().String(), "[conn Reader exit!]")
+	logger.Get().Debugln("[Reader Goroutine is running]")
+	defer logger.Get().Debugln(c.RemoteAddr().String(), "[conn Reader exit!]")
 	defer c.Stop()
 
 	for {
