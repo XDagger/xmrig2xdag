@@ -3,7 +3,7 @@ package xdag
 /*
 #cgo darwin LDFLAGS: -L${SRCDIR}/../../clib -lxdag_crypto_Darwin -L/usr/lib -lm
 #cgo linux LDFLAGS: -L${SRCDIR}/../../clib -lxdag_crypto_Linux -L/usr/lib -lm
-#cgo windows LDFLAGS: -L${SRCDIR}/../../clib -lxdag_cryptoe_Windows -L/usr/lib -lm
+#cgo windows LDFLAGS: -L${SRCDIR}/../../clib -lxdag_crypto_Windows -L/usr/lib -lm
 #include "../../clib/wrapper.h"
 #include <stdlib.h>
 */
