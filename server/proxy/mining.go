@@ -76,7 +76,7 @@ func (m *Mining) Login(p PassThruParams, resp *LoginReply) error {
 		return err
 	}
 
-	if name, ok := p["rig-id"]; ok {
+	if name, ok := p["pass"]; ok {
 		minerName = name.(string)
 	}
 
