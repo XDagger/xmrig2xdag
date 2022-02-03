@@ -84,7 +84,7 @@ func (c *Connection) StartReader() {
 				logger.Get().Println("read msg head error ", err)
 				return
 			}
-
+			//logger.Get().Debugf("%#v\n", data)
 			c.jobNotify <- data
 		}
 	}

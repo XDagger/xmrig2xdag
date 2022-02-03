@@ -53,6 +53,8 @@ type Config struct {
 
 	// not yet implemented
 	//Background bool `envconfig:"background" json:"background"`
+
+	Testnet bool `envconfig:"testnet" json:"testnet"`
 }
 
 // IsMissingConfig returns true if the the error has to do with missing required configs
