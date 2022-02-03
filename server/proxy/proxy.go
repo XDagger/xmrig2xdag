@@ -248,7 +248,7 @@ func (p *Proxy) connect(minerName string) error {
 	p.Conn.Start()
 
 	block := xdag.GenerateFakeBlock()
-	binary.LittleEndian.PutUint64(block[0:8], 0)
+	binary.LittleEndian.PutUint64(block[0:8], xdag.BLOCK_HEADER_WORD)
 	crc := crc32.Checksum(block[:], crc32table)
 	newHeader := xdag.BLOCK_HEADER_WORD | (uint64(crc))<<32
 	binary.LittleEndian.PutUint64(block[0:8], newHeader)

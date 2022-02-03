@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"github.com/swordlet/xmrig2xdag/config"
+	"github.com/swordlet/xmrig2xdag/logger"
 	"unsafe"
 )
 
@@ -19,6 +20,7 @@ const (
 
 	bits2mime                   = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 	XDAG_FIELD_HEAD      uint64 = 1
+	XDAG_FIELD_SIGN_IN   uint64 = 4
 	XDAG_FIELD_SIGN_OUT  uint64 = 5
 	XDAG_FIELD_HEAD_TEST uint64 = 8
 
@@ -134,9 +136,11 @@ func GenerateFakeBlock() [RawBlockSize]byte {
 	var transportHeader uint64 = 1
 	var amount uint64 = 0
 	var fieldType uint64
-	if config.Get().Debug {
+	if config.Get().Testnet {
+		logger.Get().Debugln("XDAG_FIELD_HEAD_TEST")
 		fieldType = XDAG_FIELD_HEAD_TEST | ((XDAG_FIELD_SIGN_OUT * 0x11) << 4)
 	} else {
+		logger.Get().Debugln("XDAG_FIELD_HEAD")
 		fieldType = XDAG_FIELD_HEAD | ((XDAG_FIELD_SIGN_OUT * 0x11) << 4)
 	}
 	binary.LittleEndian.PutUint64(block[0:8], transportHeader)
