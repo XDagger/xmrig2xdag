@@ -8,6 +8,7 @@ XMRig can connect to XDAG mining pool through XMRig2XDAG proxy.
 
 XDAG and XMR are using the same mining algorithm: RandomX.
 
+XMRig fork  https://github.com/swordlet/xmrig/tree/xdag
 
 ## Acknowledgement
 https://github.com/xmrig/xmrig
