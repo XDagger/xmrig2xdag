@@ -219,12 +219,14 @@ func (p *Proxy) handleNotification(notif []byte) {
 		}
 
 		job := p.CreateJob(p.recvByte[:])
-		err := p.handleJob(job)
+		if p.currentJob.Blob == "" || p.currentJob.Blob[:32] != job.Blob[:32] {
+			err := p.handleJob(job)
 
-		if err != nil {
-			// log and wait for the next job?
-			logger.Get().Println("error processing job: ", job)
-			logger.Get().Println(err)
+			if err != nil {
+				// log and wait for the next job?
+				logger.Get().Println("error processing job: ", job)
+				logger.Get().Println(err)
+			}
 		}
 
 	}
