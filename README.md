@@ -11,8 +11,11 @@ XDAG and XMR are using the same mining algorithm: RandomX.
 XMRig2XDAG is Working with XMRig fork  https://github.com/swordlet/xmrig/tree/xdag.
 
 # Guide
+start up command line and configure file
 
 ## start up
+start up  xmrig2xdag proxy and xmrig miner
+
 ### proxy
 ./xmrig2xdag -c config.json
 
@@ -20,6 +23,8 @@ XMRig2XDAG is Working with XMRig fork  https://github.com/swordlet/xmrig/tree/xd
 ./xmrig -c config.json  (using administrator or root)
 
 ## config file
+xmrig2xdag proxy and xmrig config file
+
 ### xmrig2xdag config json file
 
     {
