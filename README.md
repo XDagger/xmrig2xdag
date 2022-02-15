@@ -12,9 +12,7 @@ XMRig2XDAG is Working with XMRig fork  https://github.com/swordlet/xmrig/tree/xd
 
 # Guide
 
-
 ## start up
-
 ### proxy
 ./xmrig2xdag -c config.json
 
@@ -22,7 +20,6 @@ XMRig2XDAG is Working with XMRig fork  https://github.com/swordlet/xmrig/tree/xd
 ./xmrig -c config.json  (using administrator or root)
 
 ## config file
-
 ### xmrig2xdag config json file
 
     {
