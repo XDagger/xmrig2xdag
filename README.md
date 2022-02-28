@@ -33,6 +33,7 @@ xmrig2xdag proxy and xmrig config file
       "tls": false,                   // using SSL
       "debug": false,                 //  printing debug info
       "testnet": false                // using test net
+      "socks5": ""                    // SOCKS5 proxy address:port 
     }
 
 ### xmrig config json file
