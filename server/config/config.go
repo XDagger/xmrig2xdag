@@ -122,7 +122,7 @@ func validate(c *Config) error {
 
 func configFromEnv() error {
 	cfg := Config{}
-	err := envconfig.Process("xmrwasp", &cfg)
+	err := envconfig.Process("xmr2xdag", &cfg)
 	if err != nil {
 		return err
 	}
