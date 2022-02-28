@@ -8,6 +8,7 @@ import (
 	"github.com/swordlet/xmrig2xdag/logger"
 	"github.com/swordlet/xmrig2xdag/stratum"
 	"github.com/swordlet/xmrig2xdag/xdag"
+	"golang.org/x/net/proxy"
 	"hash/crc32"
 	"math"
 	"math/rand"
@@ -238,7 +239,20 @@ func (p *Proxy) connect(minerName string) error {
 	if p.crypt == nil {
 		return errors.New("initialize crypto error")
 	}
-	conn, err := net.DialTimeout("tcp", config.Get().PoolAddr, timeout)
+	var conn net.Conn
+	var socks5Dialer proxy.Dialer
+	var err error
+
+	if len(config.Get().Socks5) > 11 {
+		socks5Dialer, err = proxy.SOCKS5("tcp", config.Get().Socks5, nil, proxy.Direct)
+		if err != nil {
+			return err
+		}
+		conn, err = socks5Dialer.Dial("tcp", config.Get().PoolAddr)
+	} else {
+		conn, err = net.DialTimeout("tcp", config.Get().PoolAddr, timeout)
+	}
+
 	if err != nil {
 		return err
 	}
