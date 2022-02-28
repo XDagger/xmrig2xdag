@@ -32,7 +32,7 @@ xmrig2xdag proxy and xmrig config file
       "url": "equal.xdag.org:13656",  // XDAG mining pool address and port
       "tls": false,                   // using SSL
       "debug": false,                 //  printing debug info
-      "testnet": false                // using test net
+      "testnet": false,               // using test net
       "socks5": ""                    // SOCKS5 proxy address:port 
     }
 
@@ -48,6 +48,34 @@ xmrig2xdag proxy and xmrig config file
         .....
       }
     ]
+
+## Arm or Android Mobile
+
+CPU must above Snpadragon 810 for Android
+
+install termux on Android and install scrcpy on PC for better interaction
+
+in Arm computer or Android Mobile command line:
+
+    apt update && apt upgrade &&
+
+    apt install -y git wget proot build-essential cmake libmicrohttpd &&
+
+    git clone -b xdag https://github.com/swordlet/xmrig --depth 1 &&
+
+    mkdir xmrig/build &&
+
+    cd xmrig/build &&
+
+    cmake -DWITH_HWLOC=OFF .. &&
+
+    make -j10
+
+edit config.json following the guide
+
+    ./xmrig -c config.json
+
+connect XDAG pool through xmr2xdag proxy running in local network
 
 ## Acknowledgement
 https://github.com/xmrig/xmrig
