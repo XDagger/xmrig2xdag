@@ -3,6 +3,7 @@ package xdag
 import (
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"testing"
 )
 
@@ -45,4 +46,33 @@ func TestHash2address(t *testing.T) {
 		str := Hash2address(hash[:])
 		fmt.Println(str)
 	}
+}
+
+func TestDifficulty(t *testing.T) {
+
+	hashRate := 19.722698 // 19.722698M
+
+	h := big.NewInt(int64(hashRate))
+
+	h.Lsh(h, 26) // h.Lsh(h, 58) , 58-32
+
+	//fmt.Println(h)
+	//fmt.Printf("%032x\n", h)
+
+	max128, _ := new(big.Int).SetString("ffffffffffffffffffffffffffffffff", 16)
+
+	hash128 := new(big.Int).Div(max128, h)
+
+	//s.Lsh(s, 32)  // 58-32
+
+	fmt.Printf("%032x\n", hash128)
+
+	hash64 := new(big.Int).Rsh(hash128, 64)
+
+	max64, _ := new(big.Int).SetString("ffffffffffffffff", 16)
+
+	diff := new(big.Int).Div(max64, hash64)
+
+	fmt.Printf("%016x\n", diff)
+	fmt.Println(diff)
 }
