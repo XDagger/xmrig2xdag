@@ -50,11 +50,11 @@ func TestHash2address(t *testing.T) {
 
 func TestDifficulty(t *testing.T) {
 
-	hashRate := 19.722698 // 19.722698M
+	hashRate := 20.722698 * 1024 * 1024 // << 20
 
 	h := big.NewInt(int64(hashRate))
 
-	h.Lsh(h, 26) // h.Lsh(h, 58) , 58-32
+	h.Lsh(h, 6) // h.Lsh(h, 58) , 58-32-20
 
 	//fmt.Println(h)
 	//fmt.Printf("%032x\n", h)
