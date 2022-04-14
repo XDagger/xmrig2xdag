@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.17)
 project(xdag_crypto)
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11")
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "-std=gnu11 -O3 -g -Wall -fpic -Wmissing-prototypes -Wno-unused-result")
