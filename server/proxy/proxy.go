@@ -85,8 +85,8 @@ type Proxy struct {
 	done        chan int
 	ready       bool
 	currentJob  *Job
-	//prevJob     *Job
-	jobMu sync.Mutex
+	PrevJobID   string
+	jobMu       sync.Mutex
 
 	addressHash [xdag.HashLength]byte
 	address     string
@@ -113,10 +113,10 @@ func init() {
 // NewProxy creates a new proxy, starts the work thread, and returns a pointer to it.
 func NewProxy(id uint64) *Proxy {
 	p := &Proxy{
-		ID:         id,
-		aliveSince: time.Now(),
-		currentJob: &Job{},
-		//prevJob:     &Job{},
+		ID:          id,
+		aliveSince:  time.Now(),
+		currentJob:  &Job{},
+		PrevJobID:   NewLen(28),
 		submissions: make(chan *share),
 		done:        make(chan int),
 		ready:       true,
@@ -170,6 +170,7 @@ func (p *Proxy) Run(minerName string) {
 func (p *Proxy) handleJob(job *Job) (err error) {
 	p.jobMu.Lock()
 	//p.prevJob, p.currentJob = p.currentJob, job
+	p.PrevJobID = p.currentJob.ID
 	p.currentJob = job
 
 	p.miniResult = math.MaxUint64
@@ -298,8 +299,8 @@ func (p *Proxy) validateShare(s *share) error {
 	switch {
 	case s.JobID == p.currentJob.ID:
 		job = p.currentJob
-	//case s.JobID == p.prevJob.ID:
-	//	job = p.prevJob
+	case s.JobID == p.PrevJobID:
+		job = p.currentJob
 	default:
 		return ErrBadJobID
 	}
@@ -343,7 +344,7 @@ func (p *Proxy) handleSubmit(s *share) (err error) {
 		return
 	}
 	reply := StatusReply{}
-	if !strings.HasPrefix(s.JobID, "FFFFFFFFFF") {
+	if !strings.HasPrefix(s.JobID, "FFFFFFFFFF") && s.JobID != p.PrevJobID {
 		if err = p.validateShare(s); err != nil {
 			logger.Get().Debug("share: ", s)
 			logger.Get().Println("rejecting share with: ", err)
@@ -410,7 +411,7 @@ func (p *Proxy) Submit(params map[string]interface{}) (*StatusReply, error) {
 	// if it matters - locking jobMu should be fine
 	// there might be a race for the job ids's but it shouldn't matter
 	//if s.JobID == p.currentJob.ID || s.JobID == p.prevJob.ID {
-	if s.JobID == p.currentJob.ID || strings.HasPrefix(s.JobID, "FFFFFFFFFF") {
+	if s.JobID == p.currentJob.ID || s.JobID == p.PrevJobID || strings.HasPrefix(s.JobID, "FFFFFFFFFF") {
 		p.submissions <- s
 		//} else if s.JobID == p.donateJob.ID || s.JobID == p.prevDonateJob.ID {
 		//	p.donations <- s
