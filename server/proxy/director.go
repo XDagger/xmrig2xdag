@@ -87,8 +87,8 @@ func (d *Director) printStats() {
 func (d *Director) removeProxy(pr *Proxy) {
 	if pr.Conn != nil {
 		pr.Conn.Stop()
-		delete(d.proxies, pr.ID)
 	}
+	delete(d.proxies, pr.ID)
 }
 
 func (d *Director) nextProxyID() uint64 {
