@@ -88,6 +88,8 @@ func (d *Director) removeProxy(pr *Proxy) {
 	if pr.Conn != nil {
 		pr.Conn.Stop()
 	}
+	d.newProxyMu.Lock()
+	defer d.newProxyMu.Unlock()
 	delete(d.proxies, pr.ID)
 }
 
@@ -124,12 +126,14 @@ func (d *Director) GetStats() *Stats {
 	proxyIDs := make([]int, 0)
 	var totalSharesSubmitted uint64
 	// var aliveSince time.Time
+	d.newProxyMu.Lock()
 	for ID, p := range d.proxies {
 		proxyIDs = append(proxyIDs, int(ID))
 		totalProxies++
 		totalWorkers += 1 //len(p.workers)
 		totalSharesSubmitted += p.shares
 	}
+	d.newProxyMu.Unlock()
 	recentShares := totalSharesSubmitted - d.lastTotalShares
 	d.lastTotalShares = totalSharesSubmitted
 	// if len(proxyIDs) > 0 {
