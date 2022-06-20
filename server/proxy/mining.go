@@ -78,6 +78,9 @@ func (m *Mining) Login(p PassThruParams, resp *LoginReply) error {
 
 	if name, ok := p["pass"]; ok {
 		minerName = name.(string)
+		if minerName == "x" {
+			minerName = ""
+		}
 	}
 
 	go worker.Proxy().Run(minerName)
