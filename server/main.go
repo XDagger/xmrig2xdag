@@ -3,15 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
+	"os"
+
 	"github.com/swordlet/xmrig2xdag/config"
 	"github.com/swordlet/xmrig2xdag/logger"
 	"github.com/swordlet/xmrig2xdag/tcp"
-	"log"
-	"os"
 )
 
 var (
-	version = "1.0.5"
+	version = "1.0.6"
 
 	// cmd line options
 	configFile *string
