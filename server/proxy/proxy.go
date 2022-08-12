@@ -288,10 +288,10 @@ func (p *Proxy) connect(minerName string) error {
 		xdag.EncryptField(p.crypt, unsafe.Pointer(&field[0]), p.fieldOut)
 		p.fieldOut += 1
 
-		var bytesWithHeader [36]byte
-		binary.LittleEndian.PutUint32(bytesWithHeader[0:4], 32)
-		copy(bytesWithHeader[4:], field[:])
-		p.Conn.SendBuffMsg(bytesWithHeader[:])
+		var nameWithHeader [36]byte
+		binary.LittleEndian.PutUint32(nameWithHeader[0:4], 32)
+		copy(nameWithHeader[4:], field[:])
+		p.Conn.SendBuffMsg(nameWithHeader[:])
 	}
 
 	logger.Get().Debugln("Successfully logged into pool.")
