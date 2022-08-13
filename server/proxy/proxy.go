@@ -274,7 +274,11 @@ func (p *Proxy) connect(minerName string) error {
 		xdag.EncryptField(p.crypt, unsafe.Add(ptr, uintptr(i)*xdag.FieldSize), p.fieldOut)
 		p.fieldOut += 1
 	}
-	p.Conn.SendBuffMsg(block[:])
+
+	var bytesWithHeader [516]byte
+	binary.LittleEndian.PutUint32(bytesWithHeader[0:4], 512)
+	copy(bytesWithHeader[4:], block[:])
+	p.Conn.SendBuffMsg(bytesWithHeader[:])
 
 	time.Sleep(2 * time.Second)
 	if minerName != "" {
@@ -283,7 +287,11 @@ func (p *Proxy) connect(minerName string) error {
 		copy(field[4:32], minerName[:])
 		xdag.EncryptField(p.crypt, unsafe.Pointer(&field[0]), p.fieldOut)
 		p.fieldOut += 1
-		p.Conn.SendBuffMsg(field[:])
+
+		var nameWithHeader [36]byte
+		binary.LittleEndian.PutUint32(nameWithHeader[0:4], 32)
+		copy(nameWithHeader[4:], field[:])
+		p.Conn.SendBuffMsg(nameWithHeader[:])
 	}
 
 	logger.Get().Debugln("Successfully logged into pool.")
@@ -366,7 +374,11 @@ func (p *Proxy) handleSubmit(s *share) (err error) {
 
 			xdag.EncryptField(p.crypt, unsafe.Pointer(&shareBytes[0]), p.fieldOut)
 			p.fieldOut += 1
-			p.Conn.SendBuffMsg(shareBytes)
+
+			var bytesWithHeader [36]byte
+			binary.LittleEndian.PutUint32(bytesWithHeader[0:4], 32)
+			copy(bytesWithHeader[4:], shareBytes[:])
+			p.Conn.SendBuffMsg(bytesWithHeader[:])
 
 			p.miniResult = math.MaxUint64
 			p.lastSend = t
