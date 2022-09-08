@@ -94,7 +94,7 @@ type Proxy struct {
 	addressHash [xdag.HashLength]byte
 	address     string
 
-	crypt    unsafe.Pointer
+	//crypt    unsafe.Pointer
 	fieldOut uint64
 	fieldIn  uint64
 
@@ -111,6 +111,12 @@ type Proxy struct {
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
+	if isCrypto {
+		ok := xdag.InitCrypto()
+		if ok != 0 {
+			panic(errors.New("initialize crypto error"))
+		}
+	}
 }
 
 // NewProxy creates a new proxy, starts the work thread, and returns a pointer to it.
@@ -205,7 +211,7 @@ func (p *Proxy) handleNotification(notif []byte) {
 	copy(data[:], notif[:])
 	if isCrypto {
 		ptr := unsafe.Pointer(&data[0])
-		xdag.DecryptField(p.crypt, ptr, p.fieldIn)
+		xdag.DecryptField(ptr, p.fieldIn)
 		p.fieldIn += 1
 	}
 
@@ -240,12 +246,7 @@ func (p *Proxy) handleNotification(notif []byte) {
 }
 
 func (p *Proxy) connect(minerName string) error {
-	if isCrypto {
-		p.crypt = xdag.InitCrypto()
-		if p.crypt == nil {
-			return errors.New("initialize crypto error")
-		}
-	}
+
 	var conn net.Conn
 	var socks5Dialer proxy.Dialer
 	var err error
@@ -278,7 +279,7 @@ func (p *Proxy) connect(minerName string) error {
 	if isCrypto {
 		ptr := unsafe.Pointer(&block[0])
 		for i := 0; i < xdag.XDAG_BLOCK_FIELDS; i++ {
-			xdag.EncryptField(p.crypt, unsafe.Add(ptr, uintptr(i)*xdag.FieldSize), p.fieldOut)
+			xdag.EncryptField(unsafe.Add(ptr, uintptr(i)*xdag.FieldSize), p.fieldOut)
 			p.fieldOut += 1
 		}
 	}
@@ -294,7 +295,7 @@ func (p *Proxy) connect(minerName string) error {
 		binary.LittleEndian.PutUint32(field[0:4], xdag.WORKERNAME_HEADER_WORD)
 		copy(field[4:32], minerName[:])
 		if isCrypto {
-			xdag.EncryptField(p.crypt, unsafe.Pointer(&field[0]), p.fieldOut)
+			xdag.EncryptField(unsafe.Pointer(&field[0]), p.fieldOut)
 			p.fieldOut += 1
 		}
 
@@ -338,9 +339,6 @@ func (p *Proxy) shutdown() {
 	//	w.Disconnect()
 	//}
 	p.worker.Disconnect()
-	if isCrypto {
-		xdag.FreeCrypto(p.crypt)
-	}
 
 	<-time.After(10 * time.Second) //(1 * time.Minute)
 	p.director.removeProxy(p)
@@ -383,7 +381,7 @@ func (p *Proxy) handleSubmit(s *share) (err error) {
 				shareBytes = p.MakeShare(p.miniResult, p.miniNonce)
 			}
 			if isCrypto {
-				xdag.EncryptField(p.crypt, unsafe.Pointer(&shareBytes[0]), p.fieldOut)
+				xdag.EncryptField(unsafe.Pointer(&shareBytes[0]), p.fieldOut)
 				p.fieldOut += 1
 			}
 
