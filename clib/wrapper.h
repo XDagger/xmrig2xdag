@@ -11,9 +11,9 @@
 extern "C" {
 #endif
 
-extern void *initCrypto();
-extern void encryptField(void *crypt, void *data, dfs64 sectorNo);
-extern void decryptField(void *crypt, void *data, dfs64 sectorNo);
+extern int initCrypto();
+extern void encryptField(void *data, dfs64 sectorNo);
+extern void decryptField(void *data, dfs64 sectorNo);
 
 #ifdef __cplusplus
 };

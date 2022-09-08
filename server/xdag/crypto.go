@@ -10,18 +10,14 @@ package xdag
 import "C"
 import "unsafe"
 
-func InitCrypto() unsafe.Pointer {
+func InitCrypto() C.int {
 	return C.initCrypto()
 }
 
-func FreeCrypto(p unsafe.Pointer) {
-	C.free(p)
+func EncryptField(data unsafe.Pointer, sectorNo uint64) {
+	C.encryptField(data, C.ulonglong(sectorNo))
 }
 
-func EncryptField(crypt unsafe.Pointer, data unsafe.Pointer, sectorNo uint64) {
-	C.encryptField(crypt, data, C.ulonglong(sectorNo))
-}
-
-func DecryptField(crypt unsafe.Pointer, data unsafe.Pointer, sectorNo uint64) {
-	C.decryptField(crypt, data, C.ulonglong(sectorNo))
+func DecryptField(data unsafe.Pointer, sectorNo uint64) {
+	C.decryptField(data, C.ulonglong(sectorNo))
 }
