@@ -25,7 +25,7 @@ const (
 	MaxUint = ^uint64(0)
 
 	// TODO adjust - lower means more connections to pool, potentially fewer stales if that is a problem
-	maxProxyWorkers = 1024
+	//maxProxyWorkers = 1024
 
 	retryDelay = 60 * time.Second
 
@@ -67,6 +67,8 @@ type Worker interface {
 	// Ideally it sets up the worker to try and reconnect to a new proxy through the director.
 	Disconnect()
 
+	Close()
+
 	NewJob(*Job)
 }
 
@@ -77,11 +79,11 @@ type Proxy struct {
 	SS       *stratum.Server
 	director *Director
 
-	authID     string // identifies the proxy to the pool
+	//authID     string // identifies the proxy to the pool
 	aliveSince time.Time
 	shares     uint64
 
-	workerCount int
+	//workerCount int
 	worker      Worker
 	submissions chan *share
 	notify      chan []byte
@@ -90,11 +92,12 @@ type Proxy struct {
 	currentJob  *Job
 	PrevJobID   string
 	jobMu       sync.Mutex
+	connMu      sync.RWMutex
+	isClosed    bool
 
 	addressHash [xdag.HashLength]byte
 	address     string
 
-	//crypt    unsafe.Pointer
 	fieldOut uint64
 	fieldIn  uint64
 
@@ -151,10 +154,6 @@ func (p *Proxy) Run(minerName string) {
 		<-time.After(retryDelay)
 	}
 
-	defer func() {
-		p.shutdown()
-	}()
-
 	for {
 		select {
 		// these are from workers
@@ -165,15 +164,17 @@ func (p *Proxy) Run(minerName string) {
 			}
 			if err != nil && strings.Contains(strings.ToLower(err.Error()), "banned") {
 				logger.Get().Println("Banned IP - killing proxy: ", p.ID)
+				p.shutdown(-1)
 				return
 			}
 		case notif := <-p.notify:
 			p.handleNotification(notif)
-		case <-p.done:
+		case cl := <-p.done:
+			p.shutdown(cl)
 			return
-
 		}
 	}
+
 }
 
 func (p *Proxy) handleJob(job *Job) (err error) {
@@ -226,7 +227,7 @@ func (p *Proxy) handleNotification(notif []byte) {
 		p.recvCount = 0
 		copy(p.recvByte[32:], data[:])
 
-		if p.shares > initDiffCount+1 && time.Now().Sub(p.targetSince) >= refreshDiffInterval {
+		if p.shares > initDiffCount+1 && time.Since(p.targetSince) >= refreshDiffInterval {
 			p.setTarget(p.shares)
 		}
 
@@ -331,22 +332,32 @@ func (p *Proxy) validateShare(s *share) error {
 	return s.validate(job)
 }
 
-func (p *Proxy) shutdown() {
+// proxy disconnected, cl:0 by worker, cl:1 by pool , cl:-1 byself
+func (p *Proxy) shutdown(cl int) {
+	p.connMu.Lock()
+	defer p.connMu.Unlock()
+
+	if p.isClosed {
+		return
+	}
 	logger.Get().Printf("proxy [%d] shutdown\n", p.ID)
-	// kill worker connections - they should connect to a new proxy if active
-	p.ready = false
-	//for _, w := range p.workers {
-	//	w.Disconnect()
-	//}
-	p.worker.Disconnect()
 
-	<-time.After(10 * time.Second) //(1 * time.Minute)
-	p.director.removeProxy(p)
-}
-
-func (p *Proxy) isReady() bool {
-	// the worker count read is a race TODO
-	return p.ready && p.workerCount == 1 // < maxProxyWorkers
+	if cl == 0 {
+		p.Conn.Close()
+	} else if cl == 1 {
+		p.worker.Close()
+	} else if cl == -1 {
+		p.Conn.Close()
+		p.worker.Close()
+	}
+	close(p.done)
+	p.director.removeProxy(p.ID)
+	p.worker = nil
+	p.Conn = nil
+	p.SS = nil
+	p.director = nil
+	close(p.notify)
+	p.isClosed = true
 }
 
 func (p *Proxy) handleSubmit(s *share) (err error) {
@@ -456,17 +467,18 @@ func (p *Proxy) NextJob() *Job {
 // Add a worker to the proxy - safe for concurrent use.
 func (p *Proxy) Add(w Worker) {
 	w.SetProxy(p)
-	//w.SetID(p.nextWorkerID())	//
-	//p.addWorker <- w
 	w.SetID(p.ID)
 	p.worker = w
-	p.workerCount = 1
 }
 
 // Remove a worker from the proxy - safe for concurrent use.
 func (p *Proxy) Remove(w Worker) {
-	//p.delWorker <- w
-	p.director.removeProxy(p)
+	p.connMu.Lock()
+	defer p.connMu.Unlock()
+
+	if p.isClosed {
+		return
+	}
 	p.done <- 0
 }
 
@@ -488,7 +500,7 @@ func (p *Proxy) CreateJob(blobBytes []byte) *Job {
 	}
 	copy(j.currentBlob, blobBytes)
 	copy(j.currentBlob[32:56], p.addressHash[:24]) // low 24 bytes of account address
-	nonceBytes := make([]byte, initNonceLength, initNonceLength)
+	nonceBytes := make([]byte, initNonceLength)
 	binary.BigEndian.PutUint64(nonceBytes, nonce) // last 8 bytes for nonce
 	copy(j.currentBlob[initNonceOffset:initNonceOffset+initNonceLength], nonceBytes)
 	j.Blob = hex.EncodeToString(j.currentBlob)

@@ -43,8 +43,6 @@ func SpawnWorker(conn net.Conn) {
 	// blocks until disconnect
 	w.Proxy().SS.ServeCodec(codec)
 
-	w.p.Remove(w)
-
 	w.Disconnect()
 }
 
@@ -76,6 +74,17 @@ func (w *Worker) Proxy() *proxy.Proxy {
 
 func (w *Worker) Disconnect() {
 	w.Conn().Close()
+	if w.p != nil {
+		w.p.Remove(w)
+		w.p = nil
+	}
+
+}
+
+func (w *Worker) Close() {
+	w.p = nil
+	w.Conn().Close()
+
 }
 
 func (w *Worker) NewJob(j *proxy.Job) {
