@@ -3,15 +3,14 @@
 #include "wrapper.h"
 #include <cstdint>
 
-static struct dfslib_crypt * g_crypt;
+static struct dfslib_crypt  crypt_obj;
+static struct dfslib_crypt*  g_crypt = &crypt_obj;
 
 int initCrypto() {
     struct dfslib_string str;
     uint32_t sector[128];
-    g_crypt = (dfslib_crypt *) malloc(sizeof(struct dfslib_crypt));
-    if (!g_crypt) {
-        return -1;
-    }
+    //g_crypt = (dfslib_crypt *) malloc(sizeof(struct dfslib_crypt));
+   //
     dfslib_crypt_set_password(g_crypt, dfslib_utf8_string(&str, MINERS_PWD, (uint32_t) strlen(MINERS_PWD)));
     for (int i = 0; i < 128; ++i) {
         sector[i] = SECTOR0_BASE + i * SECTOR0_OFFSET;

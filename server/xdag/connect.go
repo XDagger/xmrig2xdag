@@ -3,14 +3,15 @@ package xdag
 import (
 	"context"
 	"errors"
-	"github.com/swordlet/xmrig2xdag/logger"
 	"io"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/swordlet/xmrig2xdag/logger"
 )
 
-//Connection to XDAG pool
+// Connection to XDAG pool
 type Connection struct {
 	sync.RWMutex
 	Conn        net.Conn           //tcp socket
@@ -39,10 +40,11 @@ func NewConnection(conn net.Conn, connID uint64, notify chan []byte, done chan i
 	return c
 }
 
-//StartWriter write message Goroutine, send message to XDAG pool
+// StartWriter write message Goroutine, send message to XDAG pool
 func (c *Connection) StartWriter() {
 	logger.Get().Debugln("[Writer Goroutine is running]")
 	defer logger.Get().Debugln(c.RemoteAddr().String(), "[conn Writer exit!]")
+	defer c.Stop()
 
 	for {
 		select {
@@ -54,7 +56,6 @@ func (c *Connection) StartWriter() {
 				}
 			} else {
 				logger.Get().Println("msgBuffChan is Closed")
-				break
 			}
 		case <-c.ctx.Done():
 			return
@@ -62,7 +63,7 @@ func (c *Connection) StartWriter() {
 	}
 }
 
-//StartReader read message Goroutine, receive message from XDAG pool
+// StartReader read message Goroutine, receive message from XDAG pool
 func (c *Connection) StartReader() {
 	logger.Get().Debugln("[Reader Goroutine is running]")
 	defer logger.Get().Debugln(c.RemoteAddr().String(), "[conn Reader exit!]")
@@ -90,7 +91,7 @@ func (c *Connection) StartReader() {
 	}
 }
 
-//Start a connection
+// Start a connection
 func (c *Connection) Start() {
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	//1 start receive Goroutine
@@ -99,13 +100,13 @@ func (c *Connection) Start() {
 	go c.StartWriter()
 }
 
-//Stop a connection
+// Stop a connection
 func (c *Connection) Stop() {
 
 	c.Lock()
 	defer c.Unlock()
 
-	if c.isClosed == true {
+	if c.isClosed {
 		return
 	}
 
@@ -123,22 +124,45 @@ func (c *Connection) Stop() {
 
 }
 
-//GetTCPConnection get socket TCPConn
+// worker disconnected
+func (c *Connection) Close() {
+
+	c.Lock()
+	defer c.Unlock()
+
+	if c.isClosed {
+		return
+	}
+
+	logger.Get().Println("Conn Stop()...ConnID = ", c.ConnID)
+
+	c.Conn.Close()
+	//close writer
+	c.cancel()
+
+	//close channel
+	close(c.msgBuffChan)
+	//set flag
+	c.isClosed = true
+
+}
+
+// GetTCPConnection get socket TCPConn
 func (c *Connection) GetTCPConnection() net.Conn {
 	return c.Conn
 }
 
-//GetConnID  get ID
+// GetConnID  get ID
 func (c *Connection) GetConnID() uint64 {
 	return c.ConnID
 }
 
-//RemoteAddr get remote address
+// RemoteAddr get remote address
 func (c *Connection) RemoteAddr() net.Addr {
 	return c.Conn.RemoteAddr()
 }
 
-//SendBuffMsg  send message to XDAG pool through buffered channel
+// SendBuffMsg  send message to XDAG pool through buffered channel
 func (c *Connection) SendBuffMsg(data []byte) error {
 	c.RLock()
 	defer c.RUnlock()
