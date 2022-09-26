@@ -1,9 +1,11 @@
 .idea
 .vscode
 .DS_Store
+build
 main
 xmrig2xdag
 go_build_xmrig2xdag
+clib/*.a
 *.exe
 *.log
 *.out
