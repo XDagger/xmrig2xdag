@@ -84,16 +84,18 @@ type Proxy struct {
 	shares     uint64
 
 	//workerCount int
-	worker      Worker
-	submissions chan *share
-	notify      chan []byte
-	done        chan int
-	ready       bool
-	currentJob  *Job
-	PrevJobID   string
-	jobMu       sync.Mutex
-	connMu      sync.RWMutex
-	isClosed    bool
+	worker                Worker
+	submissions           chan *share
+	notify                chan []byte
+	done                  chan int
+	ready                 bool
+	currentJob            *Job
+	PrevJobID             string
+	BeforePrevJobID       string
+	BeforeBeforePrevJobID string
+	jobMu                 sync.Mutex
+	connMu                sync.RWMutex
+	isClosed              bool
 
 	addressHash [xdag.HashLength]byte
 	address     string
@@ -180,6 +182,8 @@ func (p *Proxy) Run(minerName string) {
 func (p *Proxy) handleJob(job *Job) (err error) {
 	p.jobMu.Lock()
 	//p.prevJob, p.currentJob = p.currentJob, job
+	p.BeforeBeforePrevJobID = p.BeforePrevJobID
+	p.BeforePrevJobID = p.PrevJobID
 	p.PrevJobID = p.currentJob.ID
 	p.currentJob = job
 
@@ -340,13 +344,15 @@ func (p *Proxy) shutdown(cl int) {
 	if p.isClosed {
 		return
 	}
-	logger.Get().Printf("proxy [%d] shutdown\n", p.ID)
 
 	if cl == 0 {
+		logger.Get().Printf("proxy [%d] shutdown by worker\n", p.ID)
 		p.Conn.Close()
 	} else if cl == 1 {
+		logger.Get().Printf("proxy [%d] shutdown by pool\n", p.ID)
 		p.worker.Close()
 	} else if cl == -1 {
+		logger.Get().Printf("proxy [%d] shutdown\n", p.ID)
 		p.Conn.Close()
 		p.worker.Close()
 	}
@@ -372,7 +378,7 @@ func (p *Proxy) handleSubmit(s *share) (err error) {
 		return
 	}
 	reply := StatusReply{}
-	if !strings.HasPrefix(s.JobID, "FFFFFFFFFF") && s.JobID != p.PrevJobID {
+	if !strings.HasPrefix(s.JobID, "FFFFFFFFFF") && s.JobID == p.currentJob.ID {
 		if err = p.validateShare(s); err != nil {
 			logger.Get().Debug("share: ", s)
 			logger.Get().Println("rejecting share with: ", err)
@@ -444,7 +450,8 @@ func (p *Proxy) Submit(params map[string]interface{}) (*StatusReply, error) {
 	// if it matters - locking jobMu should be fine
 	// there might be a race for the job ids's but it shouldn't matter
 	//if s.JobID == p.currentJob.ID || s.JobID == p.prevJob.ID {
-	if s.JobID == p.currentJob.ID || s.JobID == p.PrevJobID || strings.HasPrefix(s.JobID, "FFFFFFFFFF") {
+	if s.JobID == p.currentJob.ID || s.JobID == p.PrevJobID || strings.HasPrefix(s.JobID, "FFFFFFFFFF") ||
+		s.JobID == p.BeforePrevJobID || s.JobID == p.BeforeBeforePrevJobID {
 		p.submissions <- s
 		//} else if s.JobID == p.donateJob.ID || s.JobID == p.prevDonateJob.ID {
 		//	p.donations <- s
