@@ -86,7 +86,11 @@ func (c *Connection) StartReader() {
 				return
 			}
 			//logger.Get().Debugf("%#v\n", data)
-			c.jobNotify <- data
+			c.RLock()
+			if !c.isClosed {
+				c.jobNotify <- data
+			}
+			c.RUnlock()
 		}
 	}
 }
@@ -110,7 +114,7 @@ func (c *Connection) Stop() {
 		return
 	}
 
-	logger.Get().Println("Conn Stop()...ConnID = ", c.ConnID)
+	logger.Get().Println("Conn Stoped()...ConnID = ", c.ConnID)
 
 	c.Conn.Close()
 	//close writer
@@ -134,7 +138,7 @@ func (c *Connection) Close() {
 		return
 	}
 
-	logger.Get().Println("Conn Stop()...ConnID = ", c.ConnID)
+	logger.Get().Println("Conn Closed() ...ConnID = ", c.ConnID)
 
 	c.Conn.Close()
 	//close writer
