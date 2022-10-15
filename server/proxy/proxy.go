@@ -93,7 +93,7 @@ type Proxy struct {
 	PrevJobID             string
 	BeforePrevJobID       string
 	BeforeBeforePrevJobID string
-	jobMu                 sync.Mutex
+	jobMu                 sync.RWMutex
 	connMu                sync.RWMutex
 	isClosed              bool
 
@@ -447,6 +447,9 @@ func (p *Proxy) Submit(params map[string]interface{}) (*StatusReply, error) {
 		return nil, ErrMalformedShare
 	}
 
+	p.jobMu.RLock()
+	defer p.jobMu.RUnlock()
+
 	// if it matters - locking jobMu should be fine
 	// there might be a race for the job ids's but it shouldn't matter
 	//if s.JobID == p.currentJob.ID || s.JobID == p.prevJob.ID {
@@ -462,7 +465,7 @@ func (p *Proxy) Submit(params map[string]interface{}) (*StatusReply, error) {
 	return <-s.Response, <-s.Error
 }
 
-// NextJob gets gets the next job (on the current block) and increments the nonce
+// NextJob gets the next job (on the current block) and increments the nonce
 func (p *Proxy) NextJob() *Job {
 	p.jobMu.Lock()
 	defer p.jobMu.Unlock()
