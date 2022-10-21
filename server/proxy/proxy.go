@@ -93,7 +93,7 @@ type Proxy struct {
 	PrevJobID             string
 	BeforePrevJobID       string
 	BeforeBeforePrevJobID string
-	jobMu                 sync.RWMutex
+	jobMu                 sync.Mutex
 	connMu                sync.RWMutex
 	isClosed              bool
 
@@ -225,6 +225,10 @@ func (p *Proxy) handleNotification(notif []byte) {
 	if xdag.Hash2address(data[:]) == p.address {
 		p.recvCount = 0
 	} else if p.recvCount == 0 {
+		seedZero := binary.BigEndian.Uint64(data[24:])
+		if seedZero == 0 {
+			return
+		}
 		p.recvCount++
 		copy(p.recvByte[:32], data[:])
 	} else if p.recvCount == 1 {
@@ -446,9 +450,6 @@ func (p *Proxy) Submit(params map[string]interface{}) (*StatusReply, error) {
 	if s.Nonce == "" {
 		return nil, ErrMalformedShare
 	}
-
-	p.jobMu.RLock()
-	defer p.jobMu.RUnlock()
 
 	// if it matters - locking jobMu should be fine
 	// there might be a race for the job ids's but it shouldn't matter
