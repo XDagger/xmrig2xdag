@@ -222,9 +222,9 @@ func (p *Proxy) handleNotification(notif []byte) {
 
 	//xdag.DecryptField(p.crypt, unsafe.Add(ptr, uintptr(32)), p.fieldIn)
 	//p.fieldIn += 1
-	if xdag.Hash2address(data[:]) == p.address {
+	if xdag.Hash2address(data[:]) == p.address { // ignore 32 bytes: address with balance
 		p.recvCount = 0
-	} else if p.recvCount == 0 {
+	} else if p.recvCount == 0 { // ignore the balance of fake block and the seed ,both ended with 8 bytes of zero
 		seedZero := binary.BigEndian.Uint64(data[24:])
 		if seedZero == 0 {
 			return
