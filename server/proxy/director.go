@@ -23,6 +23,7 @@ type Director struct {
 
 	// stat tracking only
 	lastTotalShares uint64
+	deleteShares    atomic.Uint64
 }
 
 func GetDirector() *Director {
@@ -76,6 +77,10 @@ func (d *Director) printStats() {
 }
 
 func (d *Director) removeProxy(id uint64) {
+	p, ok := d.proxies.Get(id)
+	if ok {
+		d.deleteShares.Add(p.(*Proxy).shares)
+	}
 	d.proxies.Del(id)
 }
 
@@ -101,6 +106,7 @@ func (d *Director) GetStats() *Stats {
 		}
 		return true
 	})
+	totalSharesSubmitted += d.deleteShares.Load()
 
 	recentShares := totalSharesSubmitted - d.lastTotalShares
 	d.lastTotalShares = totalSharesSubmitted
