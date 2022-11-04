@@ -40,7 +40,7 @@ xmrig2xdag proxy and xmrig config file
 
     {
       "strport": 3232,                // port for xmrig to connect
-      "url": "equal.xdag.org:13656",  // XDAG mining pool address and port
+      "url": "pool.xdag.org:13656",   // XDAG mining pool address and port
       "tls": false,                   // using SSL
       "debug": false,                 //  printing debug info
       "testnet": false,               // using test net
