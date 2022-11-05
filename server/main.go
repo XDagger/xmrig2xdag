@@ -53,11 +53,20 @@ func setupLogger() {
 		lc.Level = logger.Debug
 	}
 	if c.LogFile != "" {
-		f, err := os.Create(c.LogFile)
-		if err != nil {
-			log.Fatal("could not open log file for writing: ", err)
+		if logger.CheckFileExist(c.LogFile) {
+			f, err := os.OpenFile(c.LogFile, os.O_APPEND|os.O_RDWR, 0644)
+			if err != nil {
+				log.Fatal("could not open log file for writing: ", err)
+			}
+			lc.W = f
+		} else {
+			f, err := os.Create(c.LogFile)
+			if err != nil {
+				log.Fatal("could not create log file for writing: ", err)
+			}
+			lc.W = f
 		}
-		lc.W = f
+
 	}
 	if c.DiscardLog {
 		lc.Discard = true

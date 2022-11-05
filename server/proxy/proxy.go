@@ -314,7 +314,7 @@ func (p *Proxy) connect(minerName string) error {
 		p.Conn.SendBuffMsg(nameWithHeader[:])
 	}
 
-	logger.Get().Debugln("Successfully logged into pool.")
+	logger.Get().Debugln(p.address, "--Successfully logged into pool.")
 
 	logger.Get().Printf("****    Proxy [%d] Connected to pool server: %s \n", p.ID, config.Get().PoolAddr)
 	//logger.Get().Println("****    Broadcasting jobs to workers.")
@@ -350,13 +350,13 @@ func (p *Proxy) shutdown(cl int) {
 	}
 
 	if cl == 0 {
-		logger.Get().Printf("proxy [%d] shutdown by worker\n", p.ID)
+		logger.Get().Printf("proxy [%d] shutdown by worker, <%s>\n", p.ID, p.address)
 		p.Conn.Close()
 	} else if cl == 1 {
-		logger.Get().Printf("proxy [%d] shutdown by pool\n", p.ID)
+		logger.Get().Printf("proxy [%d] shutdown by pool, <%s>\n", p.ID, p.address)
 		p.worker.Close()
 	} else if cl == -1 {
-		logger.Get().Printf("proxy [%d] shutdown\n", p.ID)
+		logger.Get().Printf("proxy [%d] shutdown, <%s>\n", p.ID, p.address)
 		p.Conn.Close()
 		p.worker.Close()
 	}
@@ -496,7 +496,7 @@ func (p *Proxy) Remove(w Worker) {
 // CreateJob builds a job for distribution to a worker
 func (p *Proxy) CreateJob(blobBytes []byte) *Job {
 
-	logger.Get().Debugln("read: ", hex.EncodeToString(blobBytes[:]))
+	logger.Get().Debugln(p.address, "--read: ", hex.EncodeToString(blobBytes[:]))
 
 	nonce := rand.Uint64() // initial random nonce
 	j := &Job{
