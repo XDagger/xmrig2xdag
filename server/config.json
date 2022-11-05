@@ -1,6 +1,7 @@
 {
   "strport": 3232,
   "url": "xdagmine.com:13654",
+  "log": "",
   "tls": false,
   "debug": false,
   "testnet": false,
