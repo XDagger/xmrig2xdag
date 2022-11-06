@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
@@ -16,6 +17,7 @@ var (
 
 	// cmd line options
 	configFile *string
+	logFile    *os.File
 )
 
 func printWelcomeMessage() {
@@ -52,21 +54,20 @@ func setupLogger() {
 	if c.Debug {
 		lc.Level = logger.Debug
 	}
+	var err error
 	if c.LogFile != "" {
 		if logger.CheckFileExist(c.LogFile) {
-			f, err := os.OpenFile(c.LogFile, os.O_APPEND|os.O_RDWR, 0644)
+			logFile, err = os.OpenFile(c.LogFile, os.O_APPEND|os.O_RDWR, 0644)
 			if err != nil {
 				log.Fatal("could not open log file for writing: ", err)
 			}
-			lc.W = f
 		} else {
-			f, err := os.Create(c.LogFile)
+			logFile, err = os.Create(c.LogFile)
 			if err != nil {
 				log.Fatal("could not create log file for writing: ", err)
 			}
-			lc.W = f
 		}
-
+		lc.W = io.MultiWriter(os.Stdout, logFile)
 	}
 	if c.DiscardLog {
 		lc.Discard = true
@@ -78,6 +79,11 @@ func setupLogger() {
 func main() {
 	setOptions()
 	setupLogger()
+	defer func() {
+		if logFile != nil {
+			logFile.Close()
+		}
+	}()
 
 	flag.Usage = usage
 

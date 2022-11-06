@@ -1,7 +1,7 @@
 {
   "strport": 3232,
   "url": "xdagmine.com:13654",
-  "log": "",
+  "log": "proxy.log",
   "tls": false,
   "debug": false,
   "testnet": false,
