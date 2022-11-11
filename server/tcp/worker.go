@@ -81,6 +81,13 @@ func (w *Worker) Disconnect() {
 
 }
 
+func (w *Worker) RemoveProxy() {
+	if w.p != nil {
+		w.p.Close()
+		w.p = nil
+	}
+}
+
 func (w *Worker) Close() {
 	w.p = nil
 	w.Conn().Close()

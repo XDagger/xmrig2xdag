@@ -10,6 +10,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -27,9 +28,9 @@ const (
 	// TODO adjust - lower means more connections to pool, potentially fewer stales if that is a problem
 	//maxProxyWorkers = 1024
 
-	retryDelay = 60 * time.Second
+	retryDelay = 5 * time.Second
 
-	timeout = 60 * time.Second
+	timeout = 10 * time.Second
 
 	xdagAlgo = `rx/xdag`
 
@@ -41,7 +42,12 @@ const (
 	submitInterval = 5
 
 	isCrypto = true
+
+	eofLimit = 3
 )
+
+var poolIsDown atomic.Uint64
+var eofCount atomic.Uint64
 
 var crc32table = crc32.MakeTable(0xEDB88320)
 
@@ -70,6 +76,8 @@ type Worker interface {
 	Close()
 
 	NewJob(*Job)
+
+	RemoveProxy()
 }
 
 // Proxy manages a group of workers.
@@ -136,22 +144,32 @@ func NewProxy(id uint64) *Proxy {
 		ready:       true,
 		lastSend:    time.Now(),
 		miniResult:  math.MaxUint64,
+		notify:      make(chan []byte, 2),
 	}
 
 	p.SS = stratum.NewServer()
 	p.SS.RegisterName("mining", &Mining{})
-	logger.Get().Debugln("RPC server is listening on proxy ", p.ID)
-
 	return p
 }
 
 func (p *Proxy) Run(minerName string) {
+	var retryCount = 0
 	for {
+		if poolIsDown.Load() > 0 {
+			p.shutdown(2)
+			return
+		}
 		err := p.connect(minerName)
 		if err == nil {
 			break
 		}
-		logger.Get().Printf("Failed to acquire pool connection.  Retrying in %s.Error: %s\n", retryDelay, err)
+		retryCount += 1
+		if retryCount > 3 {
+			p.shutdown(2)
+			return
+		}
+		logger.Get().Printf("Proxy[%d] Failed to acquire pool connection %d times.  Retrying in %s.Error: %s\n",
+			p.ID, retryCount, retryDelay, err)
 		// TODO allow fallback pools here
 		<-time.After(retryDelay)
 	}
@@ -276,7 +294,7 @@ func (p *Proxy) connect(minerName string) error {
 
 	logger.Get().Debugln("Client made pool connection.")
 	//p.SC = sc
-	p.notify = make(chan []byte, 2)
+
 	p.Conn = xdag.NewConnection(conn, p.ID, p.notify, p.done)
 	p.Conn.Start()
 
@@ -350,10 +368,22 @@ func (p *Proxy) shutdown(cl int) {
 	}
 
 	if cl == 0 {
-		logger.Get().Printf("proxy [%d] shutdown by worker, <%s>\n", p.ID, p.address)
+		logger.Get().Printf("proxy [%d] shutdown by worker <%s>\n", p.ID, p.address)
 		p.Conn.Close()
 	} else if cl == 1 {
-		logger.Get().Printf("proxy [%d] shutdown by pool, <%s>\n", p.ID, p.address)
+		logger.Get().Printf("proxy [%d] shutdown by pool <%s>\n", p.ID, p.address)
+		p.worker.Close()
+		if p.fieldIn == 0 && p.fieldOut < 18 && p.Conn.EOFcount.Load() > 0 {
+			eofCount.Add(1)
+			if eofCount.Load() > eofLimit { // connection eof immediately after connect
+				poolIsDown.Add(1)
+				logger.Get().Println("*** Pool is down. Please shutdown proxy and wait for pool recovery.")
+			}
+		}
+	} else if cl == 2 {
+		poolIsDown.Add(1)
+		logger.Get().Printf("proxy [%d] pool is down <%s>\n", p.ID, p.address)
+		logger.Get().Println("*** Pool is down. Please shutdown proxy and wait for pool recovery.")
 		p.worker.Close()
 	} else if cl == -1 {
 		logger.Get().Printf("proxy [%d] shutdown, <%s>\n", p.ID, p.address)
@@ -370,6 +400,27 @@ func (p *Proxy) shutdown(cl int) {
 	p.isClosed = true
 }
 
+func (p *Proxy) Close() {
+	p.connMu.Lock()
+	defer p.connMu.Unlock()
+
+	if p.isClosed {
+		return
+	}
+
+	if p.Conn != nil {
+		p.Conn.Close()
+	}
+
+	close(p.done)
+	p.director.removeProxy(p.ID)
+	p.worker = nil
+	p.Conn = nil
+	p.SS = nil
+	p.director = nil
+	close(p.notify)
+	p.isClosed = true
+}
 func (p *Proxy) handleSubmit(s *share) (err error) {
 	defer func() {
 		close(s.Response)
@@ -496,7 +547,7 @@ func (p *Proxy) Remove(w Worker) {
 // CreateJob builds a job for distribution to a worker
 func (p *Proxy) CreateJob(blobBytes []byte) *Job {
 
-	logger.Get().Debugln(p.address, "--read: ", hex.EncodeToString(blobBytes[:]))
+	logger.Get().Debugf("proxy[%d] <%s> --read: %s", p.ID, p.address, hex.EncodeToString(blobBytes[:]))
 
 	nonce := rand.Uint64() // initial random nonce
 	j := &Job{
@@ -515,8 +566,8 @@ func (p *Proxy) CreateJob(blobBytes []byte) *Job {
 	binary.BigEndian.PutUint64(nonceBytes, nonce) // last 8 bytes for nonce
 	copy(j.currentBlob[initNonceOffset:initNonceOffset+initNonceLength], nonceBytes)
 	j.Blob = hex.EncodeToString(j.currentBlob)
-	logger.Get().Debugln("job blob: ", j.Blob)
-	logger.Get().Debugln("seed: ", j.SeedHash)
+	logger.Get().Debugf("proxy[%d] job blob:%s ", p.ID, j.Blob)
+	logger.Get().Debugf("proxy[%d] seed:%s", p.ID, j.SeedHash)
 	return j
 }
 
@@ -526,7 +577,7 @@ func (p *Proxy) CreateShare(s *share) []byte {
 	var result [32]byte
 	copy(result[:28], p.currentJob.currentBlob[32:60])
 	copy(result[28:32], nonceBytes[:])
-	logger.Get().Debugln("nonce: ", s.Nonce, ", share result: ", s.Result)
+	logger.Get().Debugf("proxy[%d] nonce: %s, share result: %s", p.ID, s.Nonce, s.Result)
 	return result[:]
 }
 
@@ -534,7 +585,7 @@ func (p *Proxy) MakeShare(miniResult uint64, miniNonce uint32) []byte {
 	var result [32]byte
 	copy(result[:28], p.currentJob.currentBlob[32:60])
 	binary.LittleEndian.PutUint32(result[28:32], miniNonce)
-	logger.Get().Debugf("nonce: %08x, share result: %016x", miniNonce, miniResult)
+	logger.Get().Debugf("proxy[%d] nonce: %08x, share result: %016x", p.ID, miniNonce, miniResult)
 	return result[:]
 }
 

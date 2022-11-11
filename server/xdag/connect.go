@@ -6,10 +6,13 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/swordlet/xmrig2xdag/logger"
 )
+
+var poolDown atomic.Uint64
 
 // Connection to XDAG pool
 type Connection struct {
@@ -24,6 +27,7 @@ type Connection struct {
 	//worksCounts int
 	jobNotify chan []byte
 	done      chan int
+	EOFcount  atomic.Uint64
 }
 
 func NewConnection(conn net.Conn, connID uint64, notify chan []byte, done chan int) *Connection {
@@ -47,6 +51,9 @@ func (c *Connection) StartWriter() {
 	defer c.Stop()
 
 	for {
+		if poolDown.Load() > 0 {
+			return
+		}
 		select {
 		case data, ok := <-c.msgBuffChan:
 			if ok {
@@ -70,12 +77,15 @@ func (c *Connection) StartReader() {
 	defer c.Stop()
 
 	for {
+		if poolDown.Load() > 0 {
+			return
+		}
 		select {
 		case <-c.ctx.Done():
 			return
 		default:
 			// 设定连接的等待时长期限
-			err := c.Conn.SetReadDeadline(time.Now().Add(time.Second * 128))
+			err := c.Conn.SetReadDeadline(time.Now().Add(time.Second * 256))
 			if err != nil {
 				return
 			}
@@ -83,6 +93,17 @@ func (c *Connection) StartReader() {
 
 			if _, err = io.ReadFull(c.Conn, data); err != nil {
 				logger.Get().Println("read msg head error ", err)
+
+				switch errType := err.(type) {
+				case net.Error:
+					if errType.Timeout() {
+						poolDown.Add(1)
+					}
+				}
+
+				if err == io.EOF {
+					c.EOFcount.Add(1)
+				}
 				return
 			}
 			//logger.Get().Debugf("%#v\n", data)
@@ -124,7 +145,11 @@ func (c *Connection) Stop() {
 	close(c.msgBuffChan)
 	//set flag
 	c.isClosed = true
-	c.done <- 1
+	if poolDown.Load() > 0 {
+		c.done <- 2
+	} else {
+		c.done <- 1
+	}
 
 }
 
