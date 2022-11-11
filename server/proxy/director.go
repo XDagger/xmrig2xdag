@@ -71,6 +71,10 @@ func (d *Director) run() {
 }
 
 func (d *Director) printStats() {
+	if poolIsDown.Load() > 0 {
+		return
+	}
+
 	stats := d.GetStats()
 	logger.Get().Printf("  uptime:%s  \t proxies:%v \t workers:%v \t shares:%v(+%v)\n",
 		stats.Alive, stats.Proxies, stats.Workers, stats.Shares, stats.NewShares)

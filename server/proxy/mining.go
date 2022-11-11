@@ -62,6 +62,16 @@ func (m *Mining) Login(p PassThruParams, resp *LoginReply) error {
 	var err error
 	var minerName string
 	worker := m.getWorker(p.Context())
+	if poolIsDown.Load() > 0 {
+		resp.ID = strconv.Itoa(int(worker.ID()))
+		resp.Error = &jsonrpc2.Error{
+			Code:    -1,
+			Message: "*** pool is down, please switch to other pool.",
+		}
+		worker.RemoveProxy()
+		return errors.New("Invalid job id *** Pool is down: Please switch to other pool")
+	}
+
 	if address, ok := p["login"]; ok {
 		err = worker.Proxy().SetAddress(address.(string))
 	} else {
@@ -82,7 +92,7 @@ func (m *Mining) Login(p PassThruParams, resp *LoginReply) error {
 			minerName = ""
 		}
 	}
-
+	logger.Get().Debugln("RPC server is listening on proxy ", worker.Proxy().ID)
 	go worker.Proxy().Run(minerName)
 	//resp.Job = worker.Proxy().NextJob()
 	resp.ID = strconv.Itoa(int(worker.ID()))
