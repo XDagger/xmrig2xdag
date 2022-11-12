@@ -9,11 +9,12 @@ import (
 
 	"github.com/swordlet/xmrig2xdag/config"
 	"github.com/swordlet/xmrig2xdag/logger"
+	"github.com/swordlet/xmrig2xdag/proxy"
 	"github.com/swordlet/xmrig2xdag/tcp"
 )
 
 var (
-	version = "1.1.3"
+	version = "1.1.4"
 
 	// cmd line options
 	configFile *string
@@ -97,6 +98,7 @@ func main() {
 	holdOpen := make(chan bool, 1)
 
 	go tcp.StartServer()
+	go proxy.PoolDetect()
 
 	printWelcomeMessage()
 
