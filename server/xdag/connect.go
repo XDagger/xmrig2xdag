@@ -12,7 +12,7 @@ import (
 	"github.com/swordlet/xmrig2xdag/logger"
 )
 
-var poolDown atomic.Uint64
+var PoolDown atomic.Uint64
 
 // Connection to XDAG pool
 type Connection struct {
@@ -51,7 +51,7 @@ func (c *Connection) StartWriter() {
 	defer c.Stop()
 
 	for {
-		if poolDown.Load() > 0 {
+		if PoolDown.Load() > 0 {
 			return
 		}
 		select {
@@ -77,7 +77,7 @@ func (c *Connection) StartReader() {
 	defer c.Stop()
 
 	for {
-		if poolDown.Load() > 0 {
+		if PoolDown.Load() > 0 {
 			return
 		}
 		select {
@@ -97,7 +97,7 @@ func (c *Connection) StartReader() {
 				switch errType := err.(type) {
 				case net.Error:
 					if errType.Timeout() {
-						poolDown.Add(1)
+						PoolDown.Add(1)
 					}
 				}
 
@@ -145,7 +145,7 @@ func (c *Connection) Stop() {
 	close(c.msgBuffChan)
 	//set flag
 	c.isClosed = true
-	if poolDown.Load() > 0 {
+	if PoolDown.Load() > 0 {
 		c.done <- 2
 	} else {
 		c.done <- 1

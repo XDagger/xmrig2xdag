@@ -44,6 +44,8 @@ const (
 	isCrypto = true
 
 	eofLimit = 3
+
+	detectProxy = "XDAG_POOL_RESTART_DETECT_PROXY"
 )
 
 var poolIsDown atomic.Uint64
@@ -155,7 +157,7 @@ func NewProxy(id uint64) *Proxy {
 func (p *Proxy) Run(minerName string) {
 	var retryCount = 0
 	for {
-		if poolIsDown.Load() > 0 {
+		if poolIsDown.Load() > 0 && minerName != detectProxy {
 			p.shutdown(2)
 			return
 		}
@@ -165,7 +167,11 @@ func (p *Proxy) Run(minerName string) {
 		}
 		retryCount += 1
 		if retryCount > 3 {
-			p.shutdown(2)
+			if minerName != detectProxy {
+				p.shutdown(2)
+			} else {
+				p.shutdown(-1)
+			}
 			return
 		}
 		logger.Get().Printf("Proxy[%d] Failed to acquire pool connection %d times.  Retrying in %s.Error: %s\n",
@@ -175,6 +181,9 @@ func (p *Proxy) Run(minerName string) {
 	}
 
 	for {
+		if minerName == detectProxy && poolIsDown.Load() == 0 { // pool restart , quit detect proxy
+			return
+		}
 		select {
 		// these are from workers
 		case s := <-p.submissions:
@@ -251,6 +260,11 @@ func (p *Proxy) handleNotification(notif []byte) {
 		copy(p.recvByte[:32], data[:])
 	} else if p.recvCount == 1 {
 		p.recvCount = 0
+		if p.address == detectProxy { // pool restart, close detect proxy, restore miners connection
+			poolIsDown.Store(0)
+			p.shutdown(-1)
+			return
+		}
 		copy(p.recvByte[32:], data[:])
 
 		if p.shares > initDiffCount+1 && time.Since(p.targetSince) >= refreshDiffInterval {
@@ -369,29 +383,42 @@ func (p *Proxy) shutdown(cl int) {
 
 	if cl == 0 {
 		logger.Get().Printf("proxy [%d] shutdown by worker <%s>\n", p.ID, p.address)
-		p.Conn.Close()
+		if p.Conn != nil {
+			p.Conn.Close()
+		}
 	} else if cl == 1 {
 		logger.Get().Printf("proxy [%d] shutdown by pool <%s>\n", p.ID, p.address)
-		p.worker.Close()
+		if p.worker != nil {
+			p.worker.Close()
+		}
 		if p.fieldIn == 0 && p.fieldOut < 18 && p.Conn.EOFcount.Load() > 0 {
 			eofCount.Add(1)
 			if eofCount.Load() > eofLimit { // connection eof immediately after connect
 				poolIsDown.Add(1)
-				logger.Get().Println("*** Pool is down. Please shutdown proxy and wait for pool recovery.")
+				logger.Get().Println("*** Pool is down. Please wait for pool recovery.")
 			}
 		}
 	} else if cl == 2 {
 		poolIsDown.Add(1)
 		logger.Get().Printf("proxy [%d] pool is down <%s>\n", p.ID, p.address)
-		logger.Get().Println("*** Pool is down. Please shutdown proxy and wait for pool recovery.")
-		p.worker.Close()
+		logger.Get().Println("*** Pool is down. Please wait for pool recovery.")
+		if p.worker != nil {
+			p.worker.Close()
+		}
 	} else if cl == -1 {
 		logger.Get().Printf("proxy [%d] shutdown, <%s>\n", p.ID, p.address)
-		p.Conn.Close()
-		p.worker.Close()
+		if p.Conn != nil {
+			p.Conn.Close()
+		}
+		if p.worker != nil {
+			p.worker.Close()
+		}
 	}
+
 	close(p.done)
-	p.director.removeProxy(p.ID)
+	if p.ID > 0 {
+		p.director.removeProxy(p.ID)
+	}
 	p.worker = nil
 	p.Conn = nil
 	p.SS = nil
