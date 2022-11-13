@@ -29,6 +29,12 @@ func PoolDetect() {
 			p.fieldOut = 0
 			p.recvCount = 0
 			p.isClosed = false
+			for len(p.done) > 0 {
+				<-p.done
+			}
+			for len(p.notify) > 0 {
+				<-p.notify
+			}
 			eofCount.Store(0)
 			xdag.PoolDown.Store(0)
 			go p.Run(detectProxy)
