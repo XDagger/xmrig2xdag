@@ -415,15 +415,15 @@ func (p *Proxy) shutdown(cl int) {
 		}
 	}
 
-	close(p.done)
 	if p.ID > 0 {
+		close(p.done)
 		p.director.removeProxy(p.ID)
+		p.worker = nil
+		p.SS = nil
+		p.director = nil
+		close(p.notify)
 	}
-	p.worker = nil
 	p.Conn = nil
-	p.SS = nil
-	p.director = nil
-	close(p.notify)
 	p.isClosed = true
 }
 
@@ -438,14 +438,15 @@ func (p *Proxy) Close() {
 	if p.Conn != nil {
 		p.Conn.Close()
 	}
-
-	close(p.done)
-	p.director.removeProxy(p.ID)
-	p.worker = nil
+	if p.ID > 0 {
+		close(p.done)
+		p.director.removeProxy(p.ID)
+		p.worker = nil
+		p.SS = nil
+		p.director = nil
+		close(p.notify)
+	}
 	p.Conn = nil
-	p.SS = nil
-	p.director = nil
-	close(p.notify)
 	p.isClosed = true
 }
 func (p *Proxy) handleSubmit(s *share) (err error) {
