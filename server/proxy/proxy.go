@@ -46,6 +46,7 @@ const (
 	eofLimit = 3
 
 	detectProxy = "XDAG_POOL_RESTART_DETECT_PROXY"
+	detectAddr  = "NO_ADDRESS_PROXY_0"
 )
 
 var poolIsDown atomic.Uint64
@@ -122,6 +123,7 @@ type Proxy struct {
 	miniResult  uint64
 	miniNonce   uint32
 	targetShare uint64
+	minerName   string
 }
 
 func init() {
@@ -155,6 +157,7 @@ func NewProxy(id uint64) *Proxy {
 }
 
 func (p *Proxy) Run(minerName string) {
+	p.minerName = minerName
 	var retryCount = 0
 	for {
 		if poolIsDown.Load() > 0 && minerName != detectProxy {
@@ -348,7 +351,7 @@ func (p *Proxy) connect(minerName string) error {
 
 	logger.Get().Debugln(p.address, "--Successfully logged into pool.")
 
-	logger.Get().Printf("****    Proxy [%d] Connected to pool server: %s \n", p.ID, config.Get().PoolAddr)
+	logger.Get().Printf("****    Proxy [%d] Connected to pool server: <%s>, (%s) \n", p.ID, config.Get().PoolAddr, p.minerName)
 	//logger.Get().Println("****    Broadcasting jobs to workers.")
 
 	return nil
@@ -575,7 +578,7 @@ func (p *Proxy) Remove(w Worker) {
 // CreateJob builds a job for distribution to a worker
 func (p *Proxy) CreateJob(blobBytes []byte) *Job {
 
-	logger.Get().Debugf("proxy[%d] <%s> --read: %s", p.ID, p.address, hex.EncodeToString(blobBytes[:]))
+	logger.Get().Debugf("proxy[%d] <%s> (%s) --read: %s", p.ID, p.address, p.minerName, hex.EncodeToString(blobBytes[:]))
 
 	nonce := rand.Uint64() // initial random nonce
 	j := &Job{
