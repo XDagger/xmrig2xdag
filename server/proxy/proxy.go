@@ -12,7 +12,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/swordlet/xmrig2xdag/config"
 	"github.com/swordlet/xmrig2xdag/logger"
@@ -40,8 +39,6 @@ const (
 	refreshDiffInterval = 10 * time.Minute
 
 	submitInterval = 5
-
-	isCrypto = true
 
 	eofLimit = 3
 
@@ -128,12 +125,6 @@ type Proxy struct {
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
-	if isCrypto {
-		ok := xdag.InitCrypto()
-		if ok != 0 {
-			panic(errors.New("initialize crypto error"))
-		}
-	}
 }
 
 // NewProxy creates a new proxy, starts the work thread, and returns a pointer to it.
@@ -244,14 +235,7 @@ func (p *Proxy) broadcastJob() {
 func (p *Proxy) handleNotification(notif []byte) {
 	var data [32]byte
 	copy(data[:], notif[:])
-	if isCrypto {
-		ptr := unsafe.Pointer(&data[0])
-		xdag.DecryptField(ptr, p.fieldIn)
-		p.fieldIn += 1
-	}
-
-	//xdag.DecryptField(p.crypt, unsafe.Add(ptr, uintptr(32)), p.fieldIn)
-	//p.fieldIn += 1
+	p.fieldIn += 1
 	if xdag.Hash2address(data[:]) == p.address { // ignore 32 bytes: address with balance
 		p.recvCount = 0
 	} else if p.recvCount == 0 { // ignore the balance of fake block and the seed ,both ended with 8 bytes of zero
@@ -320,14 +304,7 @@ func (p *Proxy) connect(minerName string) error {
 	crc := crc32.Checksum(block[:], crc32table)
 	newHeader := xdag.BLOCK_HEADER_WORD | (uint64(crc))<<32
 	binary.LittleEndian.PutUint64(block[0:8], newHeader)
-	if isCrypto {
-		ptr := unsafe.Pointer(&block[0])
-		for i := 0; i < xdag.XDAG_BLOCK_FIELDS; i++ {
-			xdag.EncryptField(unsafe.Add(ptr, uintptr(i)*xdag.FieldSize), p.fieldOut)
-			p.fieldOut += 1
-		}
-	}
-
+	p.fieldOut += 16
 	var bytesWithHeader [516]byte
 	binary.LittleEndian.PutUint32(bytesWithHeader[0:4], 512)
 	copy(bytesWithHeader[4:], block[:])
@@ -338,11 +315,7 @@ func (p *Proxy) connect(minerName string) error {
 		var field [32]byte
 		binary.LittleEndian.PutUint32(field[0:4], xdag.WORKERNAME_HEADER_WORD)
 		copy(field[4:32], minerName[:])
-		if isCrypto {
-			xdag.EncryptField(unsafe.Pointer(&field[0]), p.fieldOut)
-			p.fieldOut += 1
-		}
-
+		p.fieldOut += 1
 		var nameWithHeader [36]byte
 		binary.LittleEndian.PutUint32(nameWithHeader[0:4], 32)
 		copy(nameWithHeader[4:], field[:])
@@ -352,7 +325,6 @@ func (p *Proxy) connect(minerName string) error {
 	logger.Get().Debugln(p.address, "--Successfully logged into pool.")
 
 	logger.Get().Printf("****    Proxy [%d] Connected to pool server: <%s>, (%s) \n", p.ID, config.Get().PoolAddr, p.minerName)
-	//logger.Get().Println("****    Broadcasting jobs to workers.")
 
 	return nil
 }
@@ -483,11 +455,7 @@ func (p *Proxy) handleSubmit(s *share) (err error) {
 			} else {
 				shareBytes = p.MakeShare(p.miniResult, p.miniNonce)
 			}
-			if isCrypto {
-				xdag.EncryptField(unsafe.Pointer(&shareBytes[0]), p.fieldOut)
-				p.fieldOut += 1
-			}
-
+			p.fieldOut += 1
 			var bytesWithHeader [36]byte
 			binary.LittleEndian.PutUint32(bytesWithHeader[0:4], 32)
 			copy(bytesWithHeader[4:], shareBytes[:])
