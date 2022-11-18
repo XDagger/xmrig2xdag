@@ -19,7 +19,7 @@ func PoolDetect() {
 		lastSend:    time.Now(),
 		miniResult:  math.MaxUint64,
 		notify:      make(chan []byte, 2),
-		address:     detectProxy,
+		address:     detectAddr,
 	}
 	timer := time.NewTicker(10 * time.Minute)
 	for {
