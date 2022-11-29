@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"hash/crc32"
 	"math"
 	"math/rand"
 	"net"
@@ -13,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/swordlet/xmrig2xdag/base58"
 	"github.com/swordlet/xmrig2xdag/config"
 	"github.com/swordlet/xmrig2xdag/logger"
 	"github.com/swordlet/xmrig2xdag/stratum"
@@ -49,7 +49,7 @@ const (
 var poolIsDown atomic.Uint64
 var eofCount atomic.Uint64
 
-var crc32table = crc32.MakeTable(0xEDB88320)
+// var crc32table = crc32.MakeTable(0xEDB88320)
 
 var (
 	ErrBadJobID       = errors.New("invalid job id")
@@ -105,7 +105,7 @@ type Proxy struct {
 	connMu                sync.RWMutex
 	isClosed              bool
 
-	addressHash [xdag.HashLength]byte
+	addressHash []byte // 24 bytes
 	address     string
 
 	fieldOut uint64
@@ -299,15 +299,10 @@ func (p *Proxy) connect(minerName string) error {
 	p.Conn = xdag.NewConnection(conn, p.ID, p.notify, p.done)
 	p.Conn.Start()
 
-	block := xdag.GenerateFakeBlock()
-	binary.LittleEndian.PutUint64(block[0:8], xdag.BLOCK_HEADER_WORD)
-	crc := crc32.Checksum(block[:], crc32table)
-	newHeader := xdag.BLOCK_HEADER_WORD | (uint64(crc))<<32
-	binary.LittleEndian.PutUint64(block[0:8], newHeader)
 	p.fieldOut += 16
-	var bytesWithHeader [516]byte
-	binary.LittleEndian.PutUint32(bytesWithHeader[0:4], 512)
-	copy(bytesWithHeader[4:], block[:])
+	var bytesWithHeader [24]byte
+	binary.LittleEndian.PutUint32(bytesWithHeader[0:4], 20)
+	copy(bytesWithHeader[4:], p.addressHash[:20])
 	p.Conn.SendBuffMsg(bytesWithHeader[:])
 
 	time.Sleep(2 * time.Second)
@@ -589,11 +584,14 @@ func (p *Proxy) MakeShare(miniResult uint64, miniNonce uint32) []byte {
 }
 
 func (p *Proxy) SetAddress(a string) error {
-	addressHash, err := xdag.Address2hash(a)
+	h, err := fromBase85(a)
 	if err != nil {
-		return err
+		return errors.New("invalid wallet address")
 	}
-	p.addressHash = addressHash
+	if len(h) != 24 {
+		return errors.New("invalide address length")
+	}
+	p.addressHash = h
 	p.address = a
 	return nil
 }
@@ -645,4 +643,9 @@ func (p *Proxy) setTarget(shareIndex uint64) {
 	p.targetSince = t
 	p.targetShare = p.shares
 	logger.Get().Printf("proxy [%d]new target:%s\n", p.ID, p.target)
+}
+
+func fromBase85(address string) ([]byte, error) {
+	b, _, err := base58.ChkDec(address)
+	return b, err
 }

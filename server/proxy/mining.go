@@ -83,6 +83,7 @@ func (m *Mining) Login(p PassThruParams, resp *LoginReply) error {
 			Code:    -1,
 			Message: err.Error(),
 		}
+		worker.RemoveProxy()
 		return err
 	}
 
