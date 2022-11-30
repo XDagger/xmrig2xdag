@@ -51,7 +51,7 @@ func CheckDecode(input string) (result []byte, version byte, err error) {
 	return
 }
 
-// CheckDecode decodes a string that was encoded with CheckEncode and verifies the checksum.
+// ChkDec  decodes a  XDAGJ address that was encoded with CheckEncode and verifies the checksum.
 func ChkDec(input string) (result []byte, version byte, err error) {
 	decoded := Decode(input)
 	if len(decoded) < 5 {
@@ -63,7 +63,7 @@ func ChkDec(input string) (result []byte, version byte, err error) {
 	if checksum(decoded[:len(decoded)-4]) != cksum {
 		return nil, 0, ErrChecksum
 	}
-	payload := decoded[1:]
+	payload := decoded[:]
 	result = append(result, payload...)
 	return
 }

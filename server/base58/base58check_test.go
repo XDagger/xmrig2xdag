@@ -5,9 +5,10 @@
 package base58_test
 
 import (
+	"fmt"
 	"testing"
 
-	"github.com/btcsuite/btcd/btcutil/base58"
+	"github.com/swordlet/xmrig2xdag/base58"
 )
 
 var checkEncodingStringTests = []struct {
@@ -65,5 +66,24 @@ func TestBase58Check(t *testing.T) {
 			t.Error("Checkdecode test failed, expected ErrInvalidFormat")
 		}
 	}
+
+}
+
+func TestChkDec(t *testing.T) {
+	address := "4smXToYpMy1648T3PXpBRZ8zSey5c6Sy7"
+
+	b, v, e := base58.ChkDec(address)
+	if e != nil {
+		t.Error(e)
+	}
+	fmt.Printf("%v, %d\n", b, len(b))
+	fmt.Printf("%v\n", v)
+
+	b2, v2, e2 := base58.CheckDecode(address)
+	if e2 != nil {
+		t.Error(e2)
+	}
+	fmt.Printf("%v, %d\n", b2, len(b2))
+	fmt.Printf("%v\n", v2)
 
 }
