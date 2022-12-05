@@ -105,7 +105,7 @@ type Proxy struct {
 	connMu                sync.RWMutex
 	isClosed              bool
 
-	addressHash []byte // 24 bytes
+	addressHash [24]byte
 	address     string
 
 	fieldOut uint64
@@ -300,9 +300,9 @@ func (p *Proxy) connect(minerName string) error {
 	p.Conn.Start()
 
 	p.fieldOut += 16
-	var bytesWithHeader [24]byte
-	binary.LittleEndian.PutUint32(bytesWithHeader[0:4], 20)
-	copy(bytesWithHeader[4:], p.addressHash[:20])
+	var bytesWithHeader [28]byte
+	binary.LittleEndian.PutUint32(bytesWithHeader[0:4], 24)
+	copy(bytesWithHeader[4:], p.addressHash[:])
 	p.Conn.SendBuffMsg(bytesWithHeader[:])
 
 	time.Sleep(2 * time.Second)
@@ -555,7 +555,7 @@ func (p *Proxy) CreateJob(blobBytes []byte) *Job {
 		currentBlob:  make([]byte, 64),
 	}
 	copy(j.currentBlob, blobBytes)
-	copy(j.currentBlob[32:56], p.addressHash[:24]) // low 24 bytes of account address
+	copy(j.currentBlob[32:56], p.addressHash[:]) // low 24 bytes of account address
 	nonceBytes := make([]byte, initNonceLength)
 	binary.BigEndian.PutUint64(nonceBytes, nonce) // last 8 bytes for nonce
 	copy(j.currentBlob[initNonceOffset:initNonceOffset+initNonceLength], nonceBytes)
@@ -591,7 +591,7 @@ func (p *Proxy) SetAddress(a string) error {
 	if len(h) != 24 {
 		return errors.New("invalide address length")
 	}
-	p.addressHash = h
+	copy(p.addressHash[:], h[:])
 	p.address = a
 	return nil
 }

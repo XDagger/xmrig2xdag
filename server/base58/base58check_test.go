@@ -76,14 +76,14 @@ func TestChkDec(t *testing.T) {
 	if e != nil {
 		t.Error(e)
 	}
-	fmt.Printf("%v, %d\n", b, len(b))
-	fmt.Printf("%v\n", v)
+	fmt.Printf("%x, %d\n", b, len(b))
+	fmt.Printf("%x\n", v)
 
 	b2, v2, e2 := base58.CheckDecode(address)
 	if e2 != nil {
 		t.Error(e2)
 	}
-	fmt.Printf("%v, %d\n", b2, len(b2))
-	fmt.Printf("%v\n", v2)
+	fmt.Printf("%x, %d\n", b2, len(b2))
+	fmt.Printf("%x\n", v2)
 
 }
