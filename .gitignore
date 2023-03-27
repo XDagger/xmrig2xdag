@@ -1,6 +1,7 @@
 .idea
 .vscode
 .DS_Store
+cmake-build*/
 build
 main
 xmrig2xdag
