@@ -58,6 +58,7 @@ func (d *Director) addProxy() *Proxy {
 	p := NewProxy(d.nextProxyID())
 	p.director = d
 	d.proxies.Set(p.ID, p)
+	logger.Get().Printf("proxy [%d] created, <%s>\n", p.ID, p.address)
 	return p
 }
 
@@ -85,6 +86,7 @@ func (d *Director) removeProxy(id uint64) {
 	if ok {
 		d.deleteShares.Add(p.(*Proxy).shares)
 	}
+	logger.Get().Printf("proxy [%d] removed\n", id)
 	d.proxies.Del(id)
 }
 
