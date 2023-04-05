@@ -11,15 +11,10 @@ XDAG and XMR are using the same mining algorithm: RandomX.
 XMRig2XDAG is Working with XMRig fork  https://github.com/swordlet/xmrig/tree/xdag.
 
 # Build
-
-## under clib folder
-
-    $ cmake .
-    $ make
 ## under server folder
 
     $ go mod tidy
-    $ CGO_ENABLED=1 go build
+    $ go build
 
 # Guide
 start up command line and configure file

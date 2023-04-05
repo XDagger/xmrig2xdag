@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"hash/crc32"
 	"math"
 	"math/rand"
 	"net"
@@ -12,8 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
+	"github.com/swordlet/xmrig2xdag/base58"
 	"github.com/swordlet/xmrig2xdag/config"
 	"github.com/swordlet/xmrig2xdag/logger"
 	"github.com/swordlet/xmrig2xdag/stratum"
@@ -41,8 +40,6 @@ const (
 
 	submitInterval = 5
 
-	isCrypto = true
-
 	eofLimit = 3
 
 	detectProxy = "XDAG_POOL_RESTART_DETECT_PROXY"
@@ -52,7 +49,7 @@ const (
 var poolIsDown atomic.Uint64
 var eofCount atomic.Uint64
 
-var crc32table = crc32.MakeTable(0xEDB88320)
+// var crc32table = crc32.MakeTable(0xEDB88320)
 
 var (
 	ErrBadJobID       = errors.New("invalid job id")
@@ -108,7 +105,7 @@ type Proxy struct {
 	connMu                sync.RWMutex
 	isClosed              bool
 
-	addressHash [xdag.HashLength]byte
+	addressHash [24]byte
 	address     string
 
 	fieldOut uint64
@@ -128,12 +125,6 @@ type Proxy struct {
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
-	if isCrypto {
-		ok := xdag.InitCrypto()
-		if ok != 0 {
-			panic(errors.New("initialize crypto error"))
-		}
-	}
 }
 
 // NewProxy creates a new proxy, starts the work thread, and returns a pointer to it.
@@ -244,14 +235,7 @@ func (p *Proxy) broadcastJob() {
 func (p *Proxy) handleNotification(notif []byte) {
 	var data [32]byte
 	copy(data[:], notif[:])
-	if isCrypto {
-		ptr := unsafe.Pointer(&data[0])
-		xdag.DecryptField(ptr, p.fieldIn)
-		p.fieldIn += 1
-	}
-
-	//xdag.DecryptField(p.crypt, unsafe.Add(ptr, uintptr(32)), p.fieldIn)
-	//p.fieldIn += 1
+	p.fieldIn += 1
 	if xdag.Hash2address(data[:]) == p.address { // ignore 32 bytes: address with balance
 		p.recvCount = 0
 	} else if p.recvCount == 0 { // ignore the balance of fake block and the seed ,both ended with 8 bytes of zero
@@ -315,22 +299,10 @@ func (p *Proxy) connect(minerName string) error {
 	p.Conn = xdag.NewConnection(conn, p.ID, p.notify, p.done)
 	p.Conn.Start()
 
-	block := xdag.GenerateFakeBlock()
-	binary.LittleEndian.PutUint64(block[0:8], xdag.BLOCK_HEADER_WORD)
-	crc := crc32.Checksum(block[:], crc32table)
-	newHeader := xdag.BLOCK_HEADER_WORD | (uint64(crc))<<32
-	binary.LittleEndian.PutUint64(block[0:8], newHeader)
-	if isCrypto {
-		ptr := unsafe.Pointer(&block[0])
-		for i := 0; i < xdag.XDAG_BLOCK_FIELDS; i++ {
-			xdag.EncryptField(unsafe.Add(ptr, uintptr(i)*xdag.FieldSize), p.fieldOut)
-			p.fieldOut += 1
-		}
-	}
-
-	var bytesWithHeader [516]byte
-	binary.LittleEndian.PutUint32(bytesWithHeader[0:4], 512)
-	copy(bytesWithHeader[4:], block[:])
+	p.fieldOut += 16
+	var bytesWithHeader [28]byte
+	binary.LittleEndian.PutUint32(bytesWithHeader[0:4], 24)
+	copy(bytesWithHeader[4:], p.addressHash[:])
 	p.Conn.SendBuffMsg(bytesWithHeader[:])
 
 	time.Sleep(2 * time.Second)
@@ -338,11 +310,7 @@ func (p *Proxy) connect(minerName string) error {
 		var field [32]byte
 		binary.LittleEndian.PutUint32(field[0:4], xdag.WORKERNAME_HEADER_WORD)
 		copy(field[4:32], minerName[:])
-		if isCrypto {
-			xdag.EncryptField(unsafe.Pointer(&field[0]), p.fieldOut)
-			p.fieldOut += 1
-		}
-
+		p.fieldOut += 1
 		var nameWithHeader [36]byte
 		binary.LittleEndian.PutUint32(nameWithHeader[0:4], 32)
 		copy(nameWithHeader[4:], field[:])
@@ -352,7 +320,6 @@ func (p *Proxy) connect(minerName string) error {
 	logger.Get().Debugln(p.address, "--Successfully logged into pool.")
 
 	logger.Get().Printf("****    Proxy [%d] Connected to pool server: <%s>, (%s) \n", p.ID, config.Get().PoolAddr, p.minerName)
-	//logger.Get().Println("****    Broadcasting jobs to workers.")
 
 	return nil
 }
@@ -483,11 +450,7 @@ func (p *Proxy) handleSubmit(s *share) (err error) {
 			} else {
 				shareBytes = p.MakeShare(p.miniResult, p.miniNonce)
 			}
-			if isCrypto {
-				xdag.EncryptField(unsafe.Pointer(&shareBytes[0]), p.fieldOut)
-				p.fieldOut += 1
-			}
-
+			p.fieldOut += 1
 			var bytesWithHeader [36]byte
 			binary.LittleEndian.PutUint32(bytesWithHeader[0:4], 32)
 			copy(bytesWithHeader[4:], shareBytes[:])
@@ -592,7 +555,7 @@ func (p *Proxy) CreateJob(blobBytes []byte) *Job {
 		currentBlob:  make([]byte, 64),
 	}
 	copy(j.currentBlob, blobBytes)
-	copy(j.currentBlob[32:56], p.addressHash[:24]) // low 24 bytes of account address
+	copy(j.currentBlob[32:56], p.addressHash[:]) // low 24 bytes of account address
 	nonceBytes := make([]byte, initNonceLength)
 	binary.BigEndian.PutUint64(nonceBytes, nonce) // last 8 bytes for nonce
 	copy(j.currentBlob[initNonceOffset:initNonceOffset+initNonceLength], nonceBytes)
@@ -621,11 +584,14 @@ func (p *Proxy) MakeShare(miniResult uint64, miniNonce uint32) []byte {
 }
 
 func (p *Proxy) SetAddress(a string) error {
-	addressHash, err := xdag.Address2hash(a)
+	h, err := fromBase85(a)
 	if err != nil {
-		return err
+		return errors.New("invalid wallet address")
 	}
-	p.addressHash = addressHash
+	if len(h) != 24 {
+		return errors.New("invalide address length")
+	}
+	copy(p.addressHash[:], h[:])
 	p.address = a
 	return nil
 }
@@ -677,4 +643,9 @@ func (p *Proxy) setTarget(shareIndex uint64) {
 	p.targetSince = t
 	p.targetShare = p.shares
 	logger.Get().Printf("proxy [%d]new target:%s\n", p.ID, p.target)
+}
+
+func fromBase85(address string) ([]byte, error) {
+	b, _, err := base58.ChkDec(address)
+	return b, err
 }

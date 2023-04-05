@@ -5,8 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
 	"net/rpc"
 	"sync"
+
+	"github.com/didip/tollbooth/v7"
+	"github.com/swordlet/xmrig2xdag/config"
 )
 
 type serverCodec struct {
@@ -103,6 +107,15 @@ func NewServer() *Server {
 func (s *Server) ServeCodec(codec rpc.ServerCodec) {
 	// defer codec.Close()
 	s.Server.ServeCodec(codec)
+}
+
+func (s *Server) HandleHTTP(rpcPath, debugPath string) {
+	limit := config.Get().RateLimit
+	if limit == 0 {
+		limit = 1
+	}
+	http.Handle(rpcPath, tollbooth.LimitFuncHandler(tollbooth.NewLimiter(float64(limit), nil), s.ServeHTTP))
+	// http.Handle(debugPath, debugHTTP{server})
 }
 
 func (s *Server) ServeConn(ctx context.Context, conn io.ReadWriteCloser) {

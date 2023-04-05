@@ -1,9 +1,10 @@
 {
   "strport": 3232,
-  "url": "xdagmine.com:13654",
+  "url": "43.156.157.212:7001",
   "log": "proxy.log",
   "tls": false,
   "debug": false,
   "testnet": false,
-  "socks5": ""
+  "socks5": "",
+  "ratelimit": 10
 }
