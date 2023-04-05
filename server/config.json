@@ -1,6 +1,6 @@
 {
   "strport": 3232,
-  "url": "43.156.157.212:7001",
+  "url": "pool.xdag.org:13656",
   "log": "proxy.log",
   "tls": false,
   "debug": false,
