@@ -57,6 +57,9 @@ type Config struct {
 	Testnet   bool   `envconfig:"testnet" json:"testnet"`
 	Socks5    string `envconfig:"socks5" json:"socks5"`
 	RateLimit int    `envconfig:"ratelimit" json:"ratelimit"`
+
+	TryPoolTimes    int `envconfig:"try_pool_times" json:"try_pool_times"`
+	TryDelaySeconds int `envconfig:"try_delay_seconds" json:"try_delay_seconds"`
 }
 
 // IsMissingConfig returns true if the the error has to do with missing required configs
