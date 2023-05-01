@@ -27,7 +27,7 @@ const (
 	// TODO adjust - lower means more connections to pool, potentially fewer stales if that is a problem
 	//maxProxyWorkers = 1024
 
-	retryDelay = 5 * time.Second
+	// retryDelay = 5 * time.Second
 
 	timeout = 10 * time.Second
 
@@ -148,6 +148,14 @@ func NewProxy(id uint64) *Proxy {
 }
 
 func (p *Proxy) Run(minerName string) {
+	retryTimes := 3
+	if config.Get().TryPoolTimes > 0 {
+		retryTimes = config.Get().TryPoolTimes
+	}
+	retryDelay := 10 * time.Second
+	if config.Get().TryDelaySeconds > 1 {
+		retryDelay = time.Duration(config.Get().TryDelaySeconds) * time.Second
+	}
 	p.minerName = minerName
 	var retryCount = 0
 	for {
@@ -160,7 +168,7 @@ func (p *Proxy) Run(minerName string) {
 			break
 		}
 		retryCount += 1
-		if retryCount > 3 {
+		if retryCount > retryTimes {
 			if minerName != detectProxy {
 				p.shutdown(2)
 			} else {

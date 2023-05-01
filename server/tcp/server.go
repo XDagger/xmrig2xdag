@@ -31,7 +31,7 @@ func StartServer() {
 	}
 
 	if listenErr != nil {
-		logger.Get().Fatal("Unable to listen for tcp connections on port: ", listener.Addr(),
+		logger.Get().Fatal("Unable to listen for tcp connections on port ", portStr,
 			" Listen failed with error: ", listenErr)
 		return
 	}
