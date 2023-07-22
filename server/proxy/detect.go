@@ -2,8 +2,10 @@ package proxy
 
 import (
 	"math"
+	"os"
 	"time"
 
+	"github.com/swordlet/xmrig2xdag/config"
 	"github.com/swordlet/xmrig2xdag/xdag"
 )
 
@@ -25,6 +27,9 @@ func PoolDetect() {
 	for {
 		<-timer.C
 		if poolIsDown.Load() > 0 {
+			if config.Get().ExitOnPoolDown {
+				os.Exit(1)
+			}
 			p.fieldIn = 0
 			p.fieldOut = 0
 			p.recvCount = 0

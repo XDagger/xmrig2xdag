@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -141,10 +142,16 @@ func NewProxy(id uint64) *Proxy {
 		miniResult:  math.MaxUint64,
 		notify:      make(chan []byte, 2),
 	}
+	go p.deleteIdle()
 
 	p.SS = stratum.NewServer()
 	p.SS.RegisterName("mining", &Mining{})
 	return p
+}
+
+func (p *Proxy) deleteIdle() {
+	<-time.After(35 * time.Second)
+	p.Delete()
 }
 
 func (p *Proxy) Run(minerName string) {
@@ -282,6 +289,8 @@ func (p *Proxy) handleNotification(notif []byte) {
 }
 
 func (p *Proxy) connect(minerName string) error {
+	p.connMu.Lock()
+	defer p.connMu.Unlock()
 
 	var conn net.Conn
 	var socks5Dialer proxy.Dialer
@@ -301,7 +310,7 @@ func (p *Proxy) connect(minerName string) error {
 		return err
 	}
 
-	logger.Get().Debugln("Client made pool connection.")
+	logger.Get().Debugln("Client made pool connection.", p.ID)
 	//p.SC = sc
 
 	p.Conn = xdag.NewConnection(conn, p.ID, p.notify, p.done)
@@ -374,6 +383,9 @@ func (p *Proxy) shutdown(cl int) {
 			if eofCount.Load() > eofLimit { // connection eof immediately after connect
 				poolIsDown.Add(1)
 				logger.Get().Println("*** Pool is down. Please wait for pool recovery.")
+				if config.Get().ExitOnPoolDown {
+					os.Exit(1)
+				}
 			}
 		}
 	} else if cl == 2 {
@@ -382,6 +394,9 @@ func (p *Proxy) shutdown(cl int) {
 		logger.Get().Println("*** Pool is down. Please wait for pool recovery.")
 		if p.worker != nil {
 			p.worker.Close()
+		}
+		if config.Get().ExitOnPoolDown {
+			os.Exit(1)
 		}
 	} else if cl == -1 {
 		logger.Get().Printf("proxy [%d] shutdown, <%s>\n", p.ID, p.address)
@@ -427,6 +442,33 @@ func (p *Proxy) Close() {
 	p.Conn = nil
 	p.isClosed = true
 }
+
+func (p *Proxy) Delete() {
+	p.connMu.Lock()
+	defer p.connMu.Unlock()
+
+	if p.isClosed {
+		return
+	}
+
+	if p.Conn != nil && p.Conn.ConnID > 0 {
+		return
+	}
+
+	if p.worker != nil {
+		p.worker.Close()
+	}
+	close(p.done)
+	p.director.removeProxy(p.ID)
+	p.worker = nil
+	p.SS = nil
+	p.director = nil
+
+	logger.Get().Printf("Proxy[%d] idle deleted", p.ID)
+	p.Conn = nil
+	p.isClosed = true
+}
+
 func (p *Proxy) handleSubmit(s *share) (err error) {
 	defer func() {
 		close(s.Response)
