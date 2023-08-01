@@ -9,7 +9,7 @@ import (
 	"net/rpc"
 	"sync"
 
-	"github.com/didip/tollbooth/v7"
+	"github.com/didip/tollbooth"
 	"github.com/swordlet/xmrig2xdag/config"
 )
 

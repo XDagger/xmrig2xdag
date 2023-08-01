@@ -58,8 +58,9 @@ type Config struct {
 	Socks5    string `envconfig:"socks5" json:"socks5"`
 	RateLimit int    `envconfig:"ratelimit" json:"ratelimit"`
 
-	TryPoolTimes    int `envconfig:"try_pool_times" json:"try_pool_times"`
-	TryDelaySeconds int `envconfig:"try_delay_seconds" json:"try_delay_seconds"`
+	TryPoolTimes    int  `envconfig:"try_pool_times" json:"try_pool_times"`
+	TryDelaySeconds int  `envconfig:"try_delay_seconds" json:"try_delay_seconds"`
+	ExitOnPoolDown  bool `envconfig:"exit_on_pool_down" json:"exit_on_pool_down"`
 }
 
 // IsMissingConfig returns true if the the error has to do with missing required configs

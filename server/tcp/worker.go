@@ -5,6 +5,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/swordlet/xmrig2xdag/logger"
 	"github.com/swordlet/xmrig2xdag/proxy"
 	"github.com/swordlet/xmrig2xdag/stratum"
 )
@@ -38,6 +39,7 @@ func SpawnWorker(conn net.Conn) {
 	w.codec = codec.(*stratum.DefaultServerCodec)
 
 	p := proxy.GetDirector().NextProxy()
+	logger.Get().Debugln("New proxy.", p.ID)
 	p.Add(w) // set worker's proxy
 
 	// blocks until disconnect
@@ -83,6 +85,7 @@ func (w *Worker) Disconnect() {
 
 func (w *Worker) RemoveProxy() {
 	if w.p != nil {
+		logger.Get().Printf("proxy [%d] shutdown by login error\n", w.p.ID)
 		w.p.Close()
 		w.p = nil
 	}

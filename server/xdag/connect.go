@@ -85,7 +85,7 @@ func (c *Connection) StartReader() {
 			return
 		default:
 			// 设定连接的等待时长期限
-			err := c.Conn.SetReadDeadline(time.Now().Add(time.Second * 256))
+			err := c.Conn.SetReadDeadline(time.Now().Add(time.Second * 128))
 			if err != nil {
 				return
 			}
