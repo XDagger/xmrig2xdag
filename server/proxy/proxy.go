@@ -73,7 +73,7 @@ type Worker interface {
 	// Disconnect closes the connection to the proxy from the worker.
 	// Ideally it sets up the worker to try and reconnect to a new proxy through the director.
 	Disconnect()
-
+	Conn() net.Conn
 	Close()
 
 	NewJob(*Job)
@@ -142,17 +142,17 @@ func NewProxy(id uint64) *Proxy {
 		miniResult:  math.MaxUint64,
 		notify:      make(chan []byte, 2),
 	}
-	go p.deleteIdle()
+	// go p.deleteIdle()
 
 	p.SS = stratum.NewServer()
 	p.SS.RegisterName("mining", &Mining{})
 	return p
 }
 
-func (p *Proxy) deleteIdle() {
-	<-time.After(35 * time.Second)
-	p.Delete()
-}
+// func (p *Proxy) deleteIdle() {
+// 	<-time.After(35 * time.Second)
+// 	p.Delete()
+// }
 
 func (p *Proxy) Run(minerName string) {
 	retryTimes := 3
@@ -289,8 +289,8 @@ func (p *Proxy) handleNotification(notif []byte) {
 }
 
 func (p *Proxy) connect(minerName string) error {
-	p.connMu.Lock()
-	defer p.connMu.Unlock()
+	// p.connMu.Lock()
+	// defer p.connMu.Unlock()
 
 	var conn net.Conn
 	var socks5Dialer proxy.Dialer
@@ -443,31 +443,31 @@ func (p *Proxy) Close() {
 	p.isClosed = true
 }
 
-func (p *Proxy) Delete() {
-	p.connMu.Lock()
-	defer p.connMu.Unlock()
+// func (p *Proxy) Delete() {
+// 	p.connMu.Lock()
+// 	defer p.connMu.Unlock()
 
-	if p.isClosed {
-		return
-	}
+// 	if p.isClosed {
+// 		return
+// 	}
 
-	if p.Conn != nil && p.Conn.ConnID > 0 {
-		return
-	}
+// 	if p.Conn != nil && p.Conn.ConnID > 0 {
+// 		return
+// 	}
 
-	if p.worker != nil {
-		p.worker.Close()
-	}
-	close(p.done)
-	p.director.removeProxy(p.ID)
-	p.worker = nil
-	p.SS = nil
-	p.director = nil
+// 	if p.worker != nil {
+// 		p.worker.Close()
+// 	}
+// 	close(p.done)
+// 	p.director.removeProxy(p.ID)
+// 	p.worker = nil
+// 	p.SS = nil
+// 	p.director = nil
 
-	logger.Get().Printf("Proxy[%d] idle deleted", p.ID)
-	p.Conn = nil
-	p.isClosed = true
-}
+// 	logger.Get().Printf("Proxy[%d] idle deleted", p.ID)
+// 	p.Conn = nil
+// 	p.isClosed = true
+// }
 
 func (p *Proxy) handleSubmit(s *share) (err error) {
 	defer func() {

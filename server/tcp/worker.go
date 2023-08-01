@@ -104,7 +104,6 @@ func (w *Worker) NewJob(j *proxy.Job) {
 		w.Disconnect()
 	}
 	// other actions? shut down worker?
-	// w.Conn().SetDeadline(time.Now().Add(45 * time.Second))
 }
 
 func (w *Worker) expectedHashes() uint32 {

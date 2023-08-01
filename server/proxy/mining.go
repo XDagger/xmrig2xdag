@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"time"
 
 	"github.com/sourcegraph/jsonrpc2"
 	"github.com/swordlet/xmrig2xdag/logger"
@@ -115,6 +116,7 @@ func (m *Mining) Getjob(p PassThruParams, resp *Job) error {
 // But the coinhive miner doesn't care, it just doesn't keep up with submissions.
 func (m *Mining) Submit(p PassThruParams, resp *StatusReply) error {
 	worker := m.getWorker(p.Context())
+	worker.Conn().SetReadDeadline(time.Now().Add(45 * time.Second))
 	status, err := worker.Proxy().Submit(p)
 	if err != nil {
 		return err
