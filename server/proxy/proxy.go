@@ -283,8 +283,12 @@ func (p *Proxy) handleNotification(notif []byte) {
 }
 
 func (p *Proxy) connect(minerName string) error {
-	// p.connMu.Lock()
-	// defer p.connMu.Unlock()
+	p.connMu.Lock()
+	defer p.connMu.Unlock()
+
+	if p.isClosed {
+		return errors.New("using closed proxy error")
+	}
 
 	var conn net.Conn
 	var socks5Dialer proxy.Dialer
