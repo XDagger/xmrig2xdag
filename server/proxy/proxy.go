@@ -142,17 +142,11 @@ func NewProxy(id uint64) *Proxy {
 		miniResult:  math.MaxUint64,
 		notify:      make(chan []byte, 2),
 	}
-	// go p.deleteIdle()
 
 	p.SS = stratum.NewServer()
 	p.SS.RegisterName("mining", &Mining{})
 	return p
 }
-
-// func (p *Proxy) deleteIdle() {
-// 	<-time.After(35 * time.Second)
-// 	p.Delete()
-// }
 
 func (p *Proxy) Run(minerName string) {
 	retryTimes := 3
@@ -585,7 +579,20 @@ func (p *Proxy) Remove(w Worker) {
 	if p.isClosed {
 		return
 	}
-	p.done <- 0
+
+	if p.Conn != nil {
+		p.Conn.Close()
+	}
+
+	p.director.removeProxy(p.ID)
+	p.worker = nil
+	p.SS = nil
+	p.director = nil
+
+	logger.Get().Printf("Proxy[%d] removed", p.ID)
+	p.Conn = nil
+	close(p.done)
+	p.isClosed = true
 }
 
 // CreateJob builds a job for distribution to a worker
