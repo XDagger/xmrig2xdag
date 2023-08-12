@@ -47,7 +47,7 @@ func StartServer() {
 		if err != nil {
 			logger.Get().Println("Unable to accept connection: ", err)
 		}
-		conn.SetReadDeadline(time.Now().Add(90 * time.Second))
+		conn.SetReadDeadline(time.Now().Add(45 * time.Second))
 
 		// if !limit.Allow() {
 		// 	logger.Get().Println("Out of rate limit:", rl, "per 25 ms.")

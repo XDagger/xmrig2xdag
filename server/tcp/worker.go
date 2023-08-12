@@ -34,7 +34,9 @@ func SpawnWorker(conn net.Conn) {
 		conn: conn,
 		//jobs: make(chan *proxy.Job),
 	}
-	ctx := context.WithValue(context.Background(), "worker", w)
+	ctxTimeout, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	ctx := context.WithValue(ctxTimeout, "worker", w)
 	codec := stratum.NewDefaultServerCodecContext(ctx, w.Conn())
 	w.codec = codec.(*stratum.DefaultServerCodec)
 
@@ -75,7 +77,10 @@ func (w *Worker) Proxy() *proxy.Proxy {
 }
 
 func (w *Worker) Disconnect() {
-	w.Conn().Close()
+	if w.Conn() != nil {
+		w.Conn().Close()
+	}
+
 	if w.p != nil {
 		w.p.Remove(w)
 		w.p = nil
