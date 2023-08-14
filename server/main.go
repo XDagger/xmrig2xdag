@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	version = "2.0.4"
+	version = "2.0.5"
 
 	// cmd line options
 	configFile *string
