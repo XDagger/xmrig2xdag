@@ -26,8 +26,8 @@ type Connection struct {
 	//isMulti     bool               // multiple works
 	//worksCounts int
 	jobNotify chan []byte
-	done      chan int
-	EOFcount  atomic.Uint64
+	// done      chan int
+	EOFcount atomic.Uint64
 }
 
 func NewConnection(conn net.Conn, connID uint64, notify chan []byte, done chan int) *Connection {
@@ -38,7 +38,7 @@ func NewConnection(conn net.Conn, connID uint64, notify chan []byte, done chan i
 		isClosed:    false,
 		msgBuffChan: make(chan []byte, 8),
 		jobNotify:   notify,
-		done:        done,
+		// done:        done,
 	}
 
 	return c
@@ -145,11 +145,11 @@ func (c *Connection) Stop() {
 	close(c.msgBuffChan)
 	//set flag
 	c.isClosed = true
-	if PoolDown.Load() > 0 {
-		c.done <- 2
-	} else {
-		c.done <- 1
-	}
+	// if PoolDown.Load() > 0 {
+	// 	c.done <- 2
+	// } else {
+	// 	c.done <- 1
+	// }
 
 }
 
@@ -195,7 +195,7 @@ func (c *Connection) RemoteAddr() net.Addr {
 func (c *Connection) SendBuffMsg(data []byte) error {
 	c.RLock()
 	defer c.RUnlock()
-	if c.isClosed == true {
+	if c.isClosed {
 		return errors.New("Connection closed when send buff msg")
 	}
 	c.msgBuffChan <- data

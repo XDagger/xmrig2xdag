@@ -7,14 +7,20 @@ import (
 	"log"
 	"os"
 
+	// _ "net/http/pprof"
+
 	"github.com/swordlet/xmrig2xdag/config"
 	"github.com/swordlet/xmrig2xdag/logger"
 	"github.com/swordlet/xmrig2xdag/proxy"
 	"github.com/swordlet/xmrig2xdag/tcp"
 )
 
+// func HelloWorld(w http.ResponseWriter, r *http.Request) {
+// 	fmt.Fprintln(w, "hello world")
+// }
+
 var (
-	version = "2.0.5"
+	version = "2.0.6"
 
 	// cmd line options
 	configFile *string
@@ -103,4 +109,10 @@ func main() {
 	printWelcomeMessage()
 
 	<-holdOpen
+	// http.HandleFunc("/", HelloWorld)
+
+	// err := http.ListenAndServe(":8089", nil)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// }
 }
