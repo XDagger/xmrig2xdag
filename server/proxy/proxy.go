@@ -413,6 +413,7 @@ func (p *Proxy) shutdown(cl int) {
 		p.SS = nil
 		p.director = nil
 		close(p.notify)
+		close(p.submissions)
 	}
 	p.Conn = nil
 	p.isClosed = true
@@ -436,6 +437,8 @@ func (p *Proxy) Close() {
 		p.SS = nil
 		p.director = nil
 		close(p.notify)
+		close(p.submissions)
+
 	}
 	p.Conn = nil
 	p.isClosed = true
@@ -535,6 +538,12 @@ func (p *Proxy) handleSubmit(s *share) (err error) {
 
 // Submit sends worker shares to the pool.  Safe for concurrent use.
 func (p *Proxy) Submit(params map[string]interface{}) (*StatusReply, error) {
+	p.connMu.Lock()
+	defer p.connMu.Unlock()
+
+	if p.isClosed {
+		return nil, ErrBadJobID
+	}
 	s := newShare(params)
 
 	if s.JobID == "" {
@@ -596,6 +605,8 @@ func (p *Proxy) Remove(w Worker) {
 	logger.Get().Printf("Proxy[%d] removed", p.ID)
 	p.Conn = nil
 	close(p.done)
+	close(p.notify)
+	close(p.submissions)
 	p.isClosed = true
 }
 

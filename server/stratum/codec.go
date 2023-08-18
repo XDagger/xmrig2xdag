@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/powerman/rpc-codec/jsonrpc2"
+	"github.com/swordlet/xmrig2xdag/utils"
 )
 
 // DefaultServerCodec handles xmr stratum+tcp requests and is capabable of sending a notification to
@@ -25,7 +26,7 @@ type DefaultServerCodec struct {
 	// the response to find the original request ID.
 	mutex   sync.Mutex // protects seq, pending
 	seq     uint64
-	pending map[uint64]*json.RawMessage
+	pending *utils.SafeMap //[uint64]*json.RawMessage
 }
 
 type defaultNotification struct {
@@ -43,7 +44,7 @@ func NewDefaultServerCodec(conn io.ReadWriteCloser) rpc.ServerCodec {
 			c:   conn,
 			ctx: context.Background(),
 		},
-		pending: make(map[uint64]*json.RawMessage),
+		pending: utils.NewSafeMap(), //(map[uint64]*json.RawMessage),
 	}
 }
 
@@ -84,7 +85,8 @@ func (c *DefaultServerCodec) ReadRequestHeader(r *rpc.Request) (err error) {
 	// internal uint64 and save JSON on the side.
 	c.mutex.Lock()
 	c.seq++
-	c.pending[c.seq] = c.req.ID
+	// c.pending[c.seq] = c.req.ID
+	c.pending.Set(c.seq, c.req.ID)
 	c.req.ID = nil
 	r.Seq = c.seq
 	c.mutex.Unlock()
@@ -112,19 +114,21 @@ func (c *DefaultServerCodec) ReadRequestBody(x interface{}) error {
 // WriteResponse implements rpc.ServerCodec
 func (c *DefaultServerCodec) WriteResponse(r *rpc.Response, x interface{}) error {
 	c.mutex.Lock()
-	b, ok := c.pending[r.Seq]
+	// b, ok := c.pending[r.Seq]
+	b, ok := c.pending.Get(r.Seq)
 	if !ok {
 		c.mutex.Unlock()
 		return errors.New("invalid sequence number in response")
 	}
-	delete(c.pending, r.Seq)
+	// delete(c.pending, r.Seq)
+	c.pending.Del(r.Seq)
 	c.mutex.Unlock()
 
 	if b == nil {
 		// Notification. Do not respond.
 		return nil
 	}
-	resp := serverResponse{Version: "2.0", ID: b}
+	resp := serverResponse{Version: "2.0", ID: b.(*json.RawMessage)}
 	if r.Error == "" {
 		if x == nil {
 			resp.Result = &null
