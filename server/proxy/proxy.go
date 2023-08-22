@@ -234,11 +234,20 @@ func (p *Proxy) handleJob(job *Job) (err error) {
 
 // broadcast a job to all workers
 func (p *Proxy) broadcastJob() {
+	p.connMu.Lock()
+	defer p.connMu.Unlock()
+	if p.isClosed {
+		return
+	}
+
 	logger.Get().Debugln("Broadcasting new job to connected workers.")
 	//for _, w := range p.workers {
 	//	go w.NewJob(p.NextJob())
 	//}
-	p.worker.NewJob(p.currentJob)
+	if p.worker != nil {
+		p.worker.NewJob(p.currentJob)
+	}
+
 }
 
 func (p *Proxy) handleNotification(notif []byte) {
@@ -471,6 +480,12 @@ func (p *Proxy) Close() {
 // }
 
 func (p *Proxy) handleSubmit(s *share) (err error) {
+	p.connMu.Lock()
+	defer p.connMu.Unlock()
+	if p.isClosed {
+		return
+	}
+
 	defer func() {
 		close(s.Response)
 		close(s.Error)
