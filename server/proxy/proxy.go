@@ -98,6 +98,7 @@ type Proxy struct {
 	notify                chan []byte
 	done                  chan int
 	ready                 bool
+	Running               atomic.Bool
 	currentJob            *Job
 	PrevJobID             string
 	BeforePrevJobID       string
@@ -142,6 +143,7 @@ func NewProxy(id uint64) *Proxy {
 		miniResult:  math.MaxUint64,
 		notify:      make(chan []byte, 2),
 	}
+	p.Running.Store(false)
 	// go p.deleteIdle()
 
 	p.SS = stratum.NewServer()
@@ -188,9 +190,11 @@ func (p *Proxy) Run(minerName string) {
 		// TODO allow fallback pools here
 		<-time.After(retryDelay)
 	}
-
+	p.Running.Store(true)
+	defer p.Running.Store(false)
 	for {
 		if minerName == detectProxy && poolIsDown.Load() == 0 { // pool restart , quit detect proxy
+			p.Running.Store(false)
 			return
 		}
 		select {
@@ -585,7 +589,11 @@ func (p *Proxy) Remove(w Worker) {
 	if p.isClosed {
 		return
 	}
-	p.done <- 0
+	if p.Running.Load() {
+		p.done <- 0
+	} else {
+		p.director.removeProxy(p.ID)
+	}
 }
 
 // CreateJob builds a job for distribution to a worker
