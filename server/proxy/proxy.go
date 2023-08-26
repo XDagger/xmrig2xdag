@@ -144,17 +144,11 @@ func NewProxy(id uint64) *Proxy {
 		notify:      make(chan []byte, 2),
 	}
 	p.Running.Store(false)
-	// go p.deleteIdle()
 
 	p.SS = stratum.NewServer()
 	p.SS.RegisterName("mining", &Mining{})
 	return p
 }
-
-// func (p *Proxy) deleteIdle() {
-// 	<-time.After(35 * time.Second)
-// 	p.Delete()
-// }
 
 func (p *Proxy) Run(minerName string) {
 	retryTimes := 3
@@ -248,7 +242,9 @@ func (p *Proxy) broadcastJob() {
 	//for _, w := range p.workers {
 	//	go w.NewJob(p.NextJob())
 	//}
-	p.worker.NewJob(p.currentJob)
+	if p.Running.Load() {
+		p.worker.NewJob(p.currentJob)
+	}
 }
 
 func (p *Proxy) handleNotification(notif []byte) {
@@ -447,32 +443,6 @@ func (p *Proxy) Close() {
 	p.isClosed = true
 }
 
-// func (p *Proxy) Delete() {
-// 	p.connMu.Lock()
-// 	defer p.connMu.Unlock()
-
-// 	if p.isClosed {
-// 		return
-// 	}
-
-// 	if p.Conn != nil && p.Conn.ConnID > 0 {
-// 		return
-// 	}
-
-// 	if p.worker != nil {
-// 		p.worker.Close()
-// 	}
-// 	close(p.done)
-// 	p.director.removeProxy(p.ID)
-// 	p.worker = nil
-// 	p.SS = nil
-// 	p.director = nil
-
-// 	logger.Get().Printf("Proxy[%d] idle deleted", p.ID)
-// 	p.Conn = nil
-// 	p.isClosed = true
-// }
-
 func (p *Proxy) handleSubmit(s *share) (err error) {
 	defer func() {
 		close(s.Response)
@@ -485,49 +455,50 @@ func (p *Proxy) handleSubmit(s *share) (err error) {
 		return
 	}
 	reply := StatusReply{}
-	if !strings.HasPrefix(s.JobID, "FFFFFFFFFF") && s.JobID == p.currentJob.ID {
-		if err = p.validateShare(s); err != nil {
-			logger.Get().Debug("share: ", s)
-			logger.Get().Println("rejecting share with: ", err)
-			s.Error <- err
-			return
-		}
-		p.jobMu.Lock()
-		resBytes, _ := hex.DecodeString(s.Result)
-		nonceBytes, _ := hex.DecodeString(s.Nonce)
-		result := binary.LittleEndian.Uint64(resBytes[len(resBytes)-8:])
-		t := time.Now()
-		if t.Sub(p.lastSend) >= 4*time.Second {
-			var shareBytes []byte
-			if result < p.miniResult {
-				shareBytes = p.CreateShare(s)
+	if p.Running.Load() {
+		if !strings.HasPrefix(s.JobID, "FFFFFFFFFF") && s.JobID == p.currentJob.ID {
+			if err = p.validateShare(s); err != nil {
+				logger.Get().Debug("share: ", s)
+				logger.Get().Println("rejecting share with: ", err)
+				s.Error <- err
+				return
+			}
+			p.jobMu.Lock()
+			resBytes, _ := hex.DecodeString(s.Result)
+			nonceBytes, _ := hex.DecodeString(s.Nonce)
+			result := binary.LittleEndian.Uint64(resBytes[len(resBytes)-8:])
+			t := time.Now()
+			if t.Sub(p.lastSend) >= 4*time.Second {
+				var shareBytes []byte
+				if result < p.miniResult {
+					shareBytes = p.CreateShare(s)
+				} else {
+					shareBytes = p.MakeShare(p.miniResult, p.miniNonce)
+				}
+				p.fieldOut += 1
+				var bytesWithHeader [36]byte
+				binary.LittleEndian.PutUint32(bytesWithHeader[0:4], 32)
+				copy(bytesWithHeader[4:], shareBytes[:])
+				p.Conn.SendBuffMsg(bytesWithHeader[:])
+
+				p.miniResult = math.MaxUint64
+				p.lastSend = t
 			} else {
-				shareBytes = p.MakeShare(p.miniResult, p.miniNonce)
+				if result < p.miniResult {
+					p.miniResult = result
+					p.miniNonce = binary.LittleEndian.Uint32(nonceBytes[:])
+				}
 			}
-			p.fieldOut += 1
-			var bytesWithHeader [36]byte
-			binary.LittleEndian.PutUint32(bytesWithHeader[0:4], 32)
-			copy(bytesWithHeader[4:], shareBytes[:])
-			p.Conn.SendBuffMsg(bytesWithHeader[:])
-
-			p.miniResult = math.MaxUint64
-			p.lastSend = t
-		} else {
-			if result < p.miniResult {
-				p.miniResult = result
-				p.miniNonce = binary.LittleEndian.Uint32(nonceBytes[:])
-			}
+			p.jobMu.Unlock()
 		}
-		p.jobMu.Unlock()
+		reply.Status = "OK"
+		p.shares++
+		if p.shares == 1 {
+			p.targetSince = time.Now()
+		} else if p.shares == initDiffCount+1 {
+			p.setTarget(p.shares)
+		}
 	}
-	reply.Status = "OK"
-	p.shares++
-	if p.shares == 1 {
-		p.targetSince = time.Now()
-	} else if p.shares == initDiffCount+1 {
-		p.setTarget(p.shares)
-	}
-
 	//else if p.shares > initDiffCount+1 && time.Now().Sub(p.targetSince) >= refreshDiffInterval {
 	//	p.setTarget(p.shares)
 	//
@@ -554,7 +525,7 @@ func (p *Proxy) Submit(params map[string]interface{}) (*StatusReply, error) {
 	// there might be a race for the job ids's but it shouldn't matter
 	//if s.JobID == p.currentJob.ID || s.JobID == p.prevJob.ID {
 	if s.JobID == p.currentJob.ID || s.JobID == p.PrevJobID || strings.HasPrefix(s.JobID, "FFFFFFFFFF") ||
-		s.JobID == p.BeforePrevJobID || s.JobID == p.BeforeBeforePrevJobID {
+		s.JobID == p.BeforePrevJobID || s.JobID == p.BeforeBeforePrevJobID && p.Running.Load() {
 		p.submissions <- s
 		//} else if s.JobID == p.donateJob.ID || s.JobID == p.prevDonateJob.ID {
 		//	p.donations <- s
@@ -593,6 +564,7 @@ func (p *Proxy) Remove(w Worker) {
 		p.done <- 0
 	} else {
 		p.director.removeProxy(p.ID)
+		logger.Get().Printf("Proxy[%d] idle deleted", p.ID)
 	}
 }
 
